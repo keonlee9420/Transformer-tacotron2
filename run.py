@@ -1,8 +1,28 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+run.py: Run Script for transformer-tacotron2
+Keon Lee <keonlee9420@gmail.com>
+Kyumin Park <pkm9403@gmail.com>
+
+Usage:
+    run.py [options]
+
+Options:
+    -h --help                               show this screen
+    --cuda                                  use GPU
+    --simple-train                          train with a simple copy-task
+"""
+
+import sys
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math, copy, time
 from torch.autograd import Variable
+from docopt import docopt
+
 from attention import *
 from model import *
 from encoder import *
@@ -31,7 +51,7 @@ def make_model(src_vocab, tgt_vocab, N=6,
             nn.init.xavier_uniform_(p)
     return model
 
-def run_epoch(data_iter, model, loss_compute):
+def run_epoch(data_iter, model, loss_compute, begin_time):
     "Standard Training and Logging Function"
     start = time.time()
     total_tokens = 0
@@ -46,8 +66,8 @@ def run_epoch(data_iter, model, loss_compute):
         tokens += batch.ntokens
         if i % 50 == 1:
             elapsed = time.time() - start
-            print("Epoch Step: %d Loss: %f Tokens per Sec: %f" %
-                    (i, loss / batch.ntokens, tokens / elapsed))
+            print("Epoch Step: %d Loss: %f Tokens per Sec: %f Total Sec: %.2f" %
+                    (i, loss / batch.ntokens, tokens / elapsed, time.time() - begin_time))
             start = time.time()
             tokens = 0
     return total_loss / total_tokens
@@ -66,25 +86,43 @@ def batch_size_fn(new, count, sofar):
     return max(src_elements, tgt_elements)
 
 if __name__ == "__main__":
+    args = docopt(__doc__)
+
+    device = torch.device("cuda:0" if args['--cuda'] else "cpu")
+    print('use device: %s' % device, file=sys.stderr)
+
     # Greedy Decoding
-    # Train the simple copy task.
-    V = 11
-    criterion = LabelSmoothing(size=V, padding_idx=0, smoothing=0.0)
-    model = make_model(V, V, N=2)
-    model_opt = NoamOpt(model.src_embed[0].d_model, 1, 400,
-            torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
+    # Train the simple copy-task.
+    if args['--simple-train']:
+        """
+        We can begin by trying out a simple copy-task. 
+        Given a random set of input symbols from a small vocabulary, 
+        the goal is to generate back those same symbols.
+        """
+        V = 11
+        criterion = LabelSmoothing(size=V, padding_idx=0, smoothing=0.0)
+        criterion.to(device)
+        model = make_model(V, V, N=2)
+        model = model.to(device)
+        model_opt = NoamOpt(model.src_embed[0].d_model, 1, 400,
+                torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
 
-    # train
-    for epoch in range(10):
-        model.train()
-        run_epoch(data_gen(V, 30, 20), model, 
-                SimpleLossCompute(model.generator, criterion, model_opt))
+        # train
+        begin_time = time.time()
+        for epoch in range(10):
+            model.train()
+            run_epoch(data_gen(V, 30, 20, device=device), model,
+                    SimpleLossCompute(model.generator, criterion, model_opt), begin_time)
+            model.eval()
+            print(run_epoch(data_gen(V, 30, 5, device=device), model, 
+                            SimpleLossCompute(model.generator, criterion, None), begin_time))
+
+        # test
         model.eval()
-        print(run_epoch(data_gen(V, 30, 5), model, 
-                        SimpleLossCompute(model.generator, criterion, None)))
-
-    # test
-    model.eval()
-    src = Variable(torch.LongTensor([[1,2,3,4,5,6,7,8,9,10]]) )
-    src_mask = Variable(torch.ones(1, 1, 10) )
-    print(greedy_decode(model, src, src_mask, max_len=10, start_symbol=1))
+        model.to("cpu")
+        src = Variable(torch.LongTensor([[1,2,3,4,5,6,7,8,9,10]]) )
+        src_mask = Variable(torch.ones(1, 1, 10) )
+        print(greedy_decode(model, src, src_mask, max_len=10, start_symbol=1))
+    
+    else:
+        print("\n\nWhat else?\n\n")

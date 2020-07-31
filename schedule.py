@@ -1,4 +1,7 @@
 
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import torch
 import torch.nn as nn
 import numpy as np
@@ -53,7 +56,7 @@ class LabelSmoothing(nn.Module):
         true_dist.fill_(self.smoothing / (self.size - 2))
         true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
         true_dist[:, self.padding_idx] = 0
-        mask = torch.nonzero(target.data == self.padding_idx)
+        mask = torch.nonzero(target.data == self.padding_idx, as_tuple=False)
         if mask.dim() > 0:
             true_dist.index_fill_(0, mask.squeeze(), 0.0)
         self.true_dist = true_dist
@@ -79,13 +82,13 @@ class Batch:
             subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
         return tgt_mask
 
-def data_gen(V, batch, nbatches):
+def data_gen(V, batch, nbatches, device):
     "Generate random data for a src-tgt copy task."
     for i in range(nbatches):
         data = torch.from_numpy(np.random.randint(1, V, size=(batch, 10)))
         data[:, 0] = 1
-        src = Variable(data, requires_grad=False)
-        tgt = Variable(data, requires_grad=False)
+        src = Variable(data, requires_grad=False).to(device)
+        tgt = Variable(data, requires_grad=False).to(device)
         yield Batch(src, tgt, 0)
 
 class SimpleLossCompute:
