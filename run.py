@@ -66,7 +66,7 @@ def run_epoch(data_iter, model, loss_compute, begin_time):
         tokens += batch.ntokens
         if i % 50 == 1:
             elapsed = time.time() - start
-            print("Epoch Step: %d Loss: %f Tokens per Sec: %f Total Sec: %.2f" %
+            print("Batch: %d Loss: %f Tokens per Sec: %f Total Sec: %.2f" %
                   (i, loss / batch.ntokens, tokens / elapsed, time.time() - begin_time))
             start = time.time()
             tokens = 0
@@ -171,7 +171,8 @@ if __name__ == "__main__":
         model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
                             torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
         begin_time = time.time()
-        for epoch in range(10):
+        for epoch in range(100):
+            print(f'Epoch {epoch}')
             model_par.train()
             run_epoch((rebatch(pad_idx, b) for b in train_iter),
                       model_par,
@@ -181,7 +182,25 @@ if __name__ == "__main__":
             loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter),
                              model_par,
                              SimpleLossCompute(model.generator, criterion, opt=None), begin_time)
-            print(loss)
+            print(f'Loss: {loss}')
+
+        torch.save((model, SRC, TGT), './weights/spacy-en-de-100.pt')
+        model = model.to('cpu')
+
+        # Example
+        model.eval()
+        sent = "▁The ▁log ▁file ▁can ▁be ▁sent ▁secret ly ▁with ▁email ▁or ▁FTP ▁to ▁a ▁specified ▁receiver".split()
+        src = torch.tensor([[SRC.vocab.stoi[w] for w in sent]], dtype=torch.long)
+        src_mask = (src != SRC.vocab.stoi["<blank>"]).unsqueeze(-2)
+        out = greedy_decode(model, src, src_mask,
+                            max_len=60, start_symbol=TGT.vocab.stoi["<s>"])
+        print("Translation:", end="\t")
+        trans = "<s> "
+        for i in range(1, out.size(1)):
+            sym = TGT.vocab.itos[out[0, i]]
+            if sym == "</s>": break
+            trans += sym + " "
+        print(trans)
 
     else:
         print("\n\nWhat else?\n\n")
