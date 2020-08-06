@@ -131,3 +131,6 @@ dmypy.json
 # Temporary test files
 temp*
 .idea/
+
+# data
+/.data
