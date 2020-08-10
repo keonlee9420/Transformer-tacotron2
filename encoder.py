@@ -4,6 +4,7 @@
 import torch
 import torch.nn as nn
 import copy
+import hyperparams as hp
 
 def clones(module, N):
     """Produce N identical layers."""
@@ -11,7 +12,7 @@ def clones(module, N):
 
 class LayerNorm(nn.Module):
     """Construct a layernorm module (See citation for details)."""
-    def __init__(self, features, eps=1e-6):
+    def __init__(self, features, eps=hp.layernorm_eps):
         super(LayerNorm, self).__init__()
         self.a_2 = nn.Parameter(torch.ones(features))
         self.b_2 = nn.Parameter(torch.zeros(features))
@@ -24,8 +25,8 @@ class LayerNorm(nn.Module):
 
 class ConvNorm(nn.Module):
     """Construct a convnorm module. (from tacotron2)"""
-    def __init__(self, in_channels, out_channels, kernel_size=1, stride=1,
-                 padding=None, dilation=1, bias=True, w_init_gain='linear'):
+    def __init__(self, in_channels, out_channels, kernel_size=hp.convnorm_kernel_size, stride=hp.convnorm_stride,
+                 padding=hp.convnorm_padding, dilation=hp.convnorm_dilation, bias=hp.convnorm_bias, w_init_gain=hp.convnorm_w_init_gain):
         super(ConvNorm, self).__init__()
         if padding is None:
             assert(kernel_size % 2 == 1)

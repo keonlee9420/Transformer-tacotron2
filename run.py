@@ -25,11 +25,12 @@ from model import *
 from encoder import *
 from decoder import *
 from schedule import *
+import hyperparams as hp
 
 import spacy
 
-def make_model(src_vocab, tgt_vocab, N=6,
-               d_model=512, d_ff=2048, h=8, dropout=0.1):
+def make_model(src_vocab, tgt_vocab, N=hp.num_layers,
+               d_model=hp.model_dim, d_ff=hp.d_ff, h=hp.num_heads, dropout=hp.model_dropout):
     """Helper: Construct a model from hyperparameters."""
     c = copy.deepcopy
     attn = MultiHeadedAttention(h, d_model)
@@ -115,10 +116,10 @@ if __name__ == "__main__":
         begin_time = time.time()
         for epoch in range(10):
             model.train()
-            run_epoch(data_gen(V, 30, 20, device=device), model,
+            run_epoch(data_gen(V, hp.batch_size, 20, device=device), model,
                       SimpleLossCompute(model.generator, criterion, model_opt), begin_time)
             model.eval()
-            print(run_epoch(data_gen(V, 30, 5, device=device), model,
+            print(run_epoch(data_gen(V, hp.batch_size, 5, device=device), model,
                             SimpleLossCompute(model.generator, criterion, None), begin_time))
 
         # test

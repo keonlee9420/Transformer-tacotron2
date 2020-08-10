@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from encoder import clones, LayerNorm, ConvNorm, SublayerConnection
-
+import hyperparams as hp
 
 class Decoder(nn.Module):
     """Generic N layer decoder with masking."""
@@ -14,6 +14,10 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.layers = clones(layer, N)
         self.norm = LayerNorm(layer.size)
+        # self.decoder_prenet = DecoderPrenet(input_dim, hidden_dim, output_dim, dropout)
+        # self.mel_linear = MelLinear()
+        # self.stop_linear = StopLinear()
+        # self.decoder_postnet = Postnet()
 
     def forward(self, x, memory, src_mask, tgt_mask):
         for layer in self.layers:
@@ -111,7 +115,7 @@ class StopLinear(nn.Module):
 class Postnet(nn.Module):
     """Linear projections to produce a residual to refine the reconstruction of mel spectrogram same as Tacotron2."""
 
-    def __init__(self, mel_channels, hidden_dim, kernel_size, num_conv=5, dropout=0.1):
+    def __init__(self, mel_channels, hidden_dim, kernel_size, num_conv=hp.post_num_conv, dropout=hp.post_dropout):
         super(Postnet, self).__init__()
         self.mel_channels = mel_channels
         self.hidden_dim = hidden_dim

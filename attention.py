@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from encoder import clones
+import hyperparams as hp
 
 def attention(query, key, value, mask=None, dropout=None):
     """Compute 'Scaled Dot Product Attention'"""
@@ -20,7 +21,7 @@ def attention(query, key, value, mask=None, dropout=None):
     return torch.matmul(p_attn, value), p_attn
 
 class MultiHeadedAttention(nn.Module):
-    def __init__(self, h, d_model, dropout=0.1):
+    def __init__(self, h, d_model, dropout=hp.attention_dropout):
         """Take in model size and number of heads."""
         super(MultiHeadedAttention, self).__init__()
         assert d_model % h == 0
