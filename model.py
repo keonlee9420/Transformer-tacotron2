@@ -74,6 +74,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout, max_len=hp.positional_encoding_max_len):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
+        self.alpha = nn.Parameter(torch.ones(1))
 
         # Compute the positional encodings once in log space.
         pe = torch.zeros(max_len, d_model)
@@ -86,5 +87,5 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        x = x + self.pe[:, :x.size(1)]
+        x = x + self.alpha * self.pe[:, :x.size(1)]
         return self.dropout(x)
