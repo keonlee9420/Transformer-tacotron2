@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+import hyperparams as hp
 
 
 class EncoderDecoder(nn.Module):
@@ -47,7 +48,7 @@ class Generator(nn.Module):
 class PositionwiseFeedForward(nn.Module):
     """Implements FFN equation."""
 
-    def __init__(self, d_model, d_ff, dropout=0.1):
+    def __init__(self, d_model, d_ff, dropout=hp.position_ffn_dropout):
         super(PositionwiseFeedForward, self).__init__()
         self.w_1 = nn.Linear(d_model, d_ff)
         self.w_2 = nn.Linear(d_ff, d_model)
@@ -70,7 +71,7 @@ class Embeddings(nn.Module):
 class PositionalEncoding(nn.Module):
     """Implement the PE function."""
 
-    def __init__(self, d_model, dropout, max_len=5000):
+    def __init__(self, d_model, dropout, max_len=hp.positional_encoding_max_len):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
