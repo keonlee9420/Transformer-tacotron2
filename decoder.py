@@ -15,10 +15,11 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.layers = clones(layer, N)
         self.norm = LayerNorm(layer.size)
-        # self.decoder_prenet = DecoderPrenet(input_dim, hidden_dim, output_dim, dropout)
-        # self.mel_linear = MelLinear()
-        # self.stop_linear = StopLinear()
-        # self.decoder_postnet = Postnet()
+        self.decoder_prenet = DecoderPrenet(
+            hp.mel_channels, hp.hidden_dim, hp.model_dim, hp.pre_dropout)
+        self.mel_linear = MelLinear(hp.model_dim, hp.mel_channels)
+        self.stop_linear = StopLinear(hp.model_dim)
+        self.decoder_postnet = Postnet(hp.mel_channels, hp.hidden_dim)
 
     def forward(self, x, memory, src_mask, tgt_mask):
         for layer in self.layers:
@@ -91,12 +92,27 @@ class DecoderPrenet(nn.Module):
         return self.layer(decoder_input)
 
 
+class Linear(nn.Module):
+    """Linear Module."""
+
+    def __init__(self, in_dim, out_dim, bias=True, w_init='linear'):
+        super(Linear, self).__init__()
+        self.linear_layer = nn.Linear(in_dim, out_dim, bias=bias)
+
+        nn.init.xavier_uniform_(
+            self.linear_layer.weight,
+            gain=nn.init.calculate_gain(w_init))
+
+    def forward(self, x):
+        return self.linear_layer(x)
+
+
 class MelLinear(nn.Module):
     """Linear projections to predict the mel spectrogram same as Tacotron2."""
 
     def __init__(self, num_hidden, mel_channels):
         super(MelLinear, self).__init__()
-        self.mel_linear = nn.Linear(num_hidden, mel_channels)
+        self.mel_linear = Linear(num_hidden, mel_channels)
 
     def forward(self, decoder_input):
         return self.mel_linear(decoder_input)
@@ -107,7 +123,7 @@ class StopLinear(nn.Module):
 
     def __init__(self, num_hidden):
         super(StopLinear, self).__init__()
-        self.stop_linear = nn.Linear(num_hidden, 1, w_init='sigmoid')
+        self.stop_linear = Linear(num_hidden, 1, w_init='sigmoid')
 
     def forward(self, decoder_input):
         return self.stop_linear(decoder_input)
@@ -116,7 +132,7 @@ class StopLinear(nn.Module):
 class Postnet(nn.Module):
     """Linear projections to produce a residual to refine the reconstruction of mel spectrogram same as Tacotron2."""
 
-    def __init__(self, mel_channels, hidden_dim, kernel_size, num_conv=hp.post_num_conv, dropout=hp.post_dropout):
+    def __init__(self, mel_channels, hidden_dim, kernel_size=hp.post_kernel_size, num_conv=hp.post_num_conv, dropout=hp.post_dropout):
         super(Postnet, self).__init__()
         self.mel_channels = mel_channels
         self.hidden_dim = hidden_dim
