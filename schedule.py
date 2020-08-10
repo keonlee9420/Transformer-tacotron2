@@ -34,8 +34,8 @@ class NoamOpt:
         if step is None:
             step = self._step
         return self.factor * \
-               (self.model_size ** (-0.5) *
-                min(step ** (-0.5), step * self.warmup ** (-1.5)))
+            (self.model_size ** (-0.5) *
+             min(step ** (-0.5), step * self.warmup ** (-1.5)))
 
 
 def get_std_opt(model):
@@ -45,6 +45,7 @@ def get_std_opt(model):
 
 class LabelSmoothing(nn.Module):
     """Implement label smoothing."""
+
     def __init__(self, size, padding_idx, smoothing=0.0):
         super(LabelSmoothing, self).__init__()
         self.criterion = nn.KLDivLoss(reduction='sum')
@@ -69,6 +70,7 @@ class LabelSmoothing(nn.Module):
 
 class Batch:
     """Object for holding a batch of data with mask during training."""
+
     def __init__(self, src, trg=None, pad=0):
         self.src = src
         self.src_mask = (src != pad).unsqueeze(-2)
@@ -83,7 +85,8 @@ class Batch:
     def make_std_mask(tgt, pad):
         """Create a mask to hide padding and future words."""
         tgt_mask = (tgt != pad).unsqueeze(-2)
-        tgt_mask = tgt_mask & subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data)
+        tgt_mask = tgt_mask & subsequent_mask(
+            tgt.size(-1)).type_as(tgt_mask.data)
         return tgt_mask
 
 
@@ -99,6 +102,7 @@ def data_gen(V, batch, nbatches, device):
 
 class SimpleLossCompute:
     """A simple loss compute and train function."""
+
     def __init__(self, generator, criterion, opt=None):
         self.generator = generator
         self.criterion = criterion

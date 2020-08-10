@@ -7,6 +7,7 @@ import torch.nn as nn
 from encoder import clones, LayerNorm, ConvNorm, SublayerConnection
 import hyperparams as hp
 
+
 class Decoder(nn.Module):
     """Generic N layer decoder with masking."""
 

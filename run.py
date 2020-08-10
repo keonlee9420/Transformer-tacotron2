@@ -29,6 +29,7 @@ import hyperparams as hp
 
 import spacy
 
+
 def make_model(src_vocab, tgt_vocab, N=hp.num_layers,
                d_model=hp.model_dim, d_ff=hp.d_ff, h=hp.num_heads, dropout=hp.model_dropout):
     """Helper: Construct a model from hyperparameters."""
@@ -44,7 +45,7 @@ def make_model(src_vocab, tgt_vocab, N=hp.num_layers,
         nn.Sequential(Embeddings(d_model, tgt_vocab), c(position)),
         Generator(d_model, tgt_vocab))
 
-    # This was important from their code. 
+    # This was important from their code.
     # Initialize parameters with Glorot / fan_avg.
     for p in model.parameters():
         if p.dim() > 1:
@@ -150,7 +151,7 @@ if __name__ == "__main__":
         train, val, test = datasets.IWSLT.splits(
             exts=('.de', '.en'), fields=(SRC, TGT),
             filter_pred=lambda x: len(vars(x)['src']) <= MAX_LEN and
-                                  len(vars(x)['trg']) <= MAX_LEN)
+            len(vars(x)['trg']) <= MAX_LEN)
         MIN_FREQ = 2
         SRC.build_vocab(train.src, min_freq=MIN_FREQ)
         TGT.build_vocab(train.trg, min_freq=MIN_FREQ)
@@ -158,7 +159,8 @@ if __name__ == "__main__":
         pad_idx = TGT.vocab.stoi["<blank>"]
         model = make_model(len(SRC.vocab), len(TGT.vocab), N=6)
         model.cuda()
-        criterion = LabelSmoothing(size=len(TGT.vocab), padding_idx=pad_idx, smoothing=0.1)
+        criterion = LabelSmoothing(
+            size=len(TGT.vocab), padding_idx=pad_idx, smoothing=0.1)
         criterion.cuda()
         BATCH_SIZE = 12000
         train_iter = MyIterator(train, batch_size=BATCH_SIZE, device=device,
@@ -191,7 +193,8 @@ if __name__ == "__main__":
         # Example
         model.eval()
         sent = "▁The ▁log ▁file ▁can ▁be ▁sent ▁secret ly ▁with ▁email ▁or ▁FTP ▁to ▁a ▁specified ▁receiver".split()
-        src = torch.tensor([[SRC.vocab.stoi[w] for w in sent]], dtype=torch.long)
+        src = torch.tensor([[SRC.vocab.stoi[w]
+                             for w in sent]], dtype=torch.long)
         src_mask = (src != SRC.vocab.stoi["<blank>"]).unsqueeze(-2)
         out = greedy_decode(model, src, src_mask,
                             max_len=60, start_symbol=TGT.vocab.stoi["<s>"])
@@ -199,7 +202,8 @@ if __name__ == "__main__":
         trans = "<s> "
         for i in range(1, out.size(1)):
             sym = TGT.vocab.itos[out[0, i]]
-            if sym == "</s>": break
+            if sym == "</s>":
+                break
             trans += sym + " "
         print(trans)
 
