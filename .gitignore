@@ -134,3 +134,6 @@ temp*
 
 # data
 /.data
+
+# editor
+/.vscode
