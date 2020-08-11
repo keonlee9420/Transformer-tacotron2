@@ -4,6 +4,7 @@
 import torch
 import torch.nn as nn
 import copy
+import math
 import hyperparams as hp
 
 
@@ -95,3 +96,19 @@ class EncoderLayer(nn.Module):
         """Follow Figure 1 (left) for connections."""
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))
         return self.sublayer[1](x, self.feed_forward)
+
+
+class EncoderPrenet(nn.Module):
+    def __init__(self, in_channels, out_channels, dropout):
+        super(EncoderPrenet, self).__init__()
+        self.modules = nn.ModuleList([nn.Sequential(
+            ConvNorm(in_channels, out_channels),
+            nn.BatchNorm1d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout)
+        ) for _ in range(hp.encoder_n_conv)])
+
+    def forward(self, x):
+        for module in self.modules:
+            x = module(x)
+        return x

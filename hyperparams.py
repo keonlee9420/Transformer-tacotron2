@@ -35,6 +35,8 @@ convnorm_bias = True
 convnorm_w_init_gain = 'linear'
 
 # Encoder parameters
+encoder_n_conv = 3
+
 position_ffn_dropout = 0.1
 positional_encoding_max_len = 5000
 
