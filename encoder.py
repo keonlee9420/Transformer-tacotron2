@@ -6,7 +6,8 @@ import torch.nn as nn
 import copy
 import math
 import hyperparams as hp
-from utils import phoneme
+
+import utils
 
 
 def clones(module, N):
@@ -33,10 +34,11 @@ class ConvNorm(nn.Module):
     """Construct a convnorm module. (from tacotron2)"""
 
     def __init__(self, in_channels, out_channels, kernel_size=hp.convnorm_kernel_size, stride=hp.convnorm_stride,
-                 padding=hp.convnorm_padding, dilation=hp.convnorm_dilation, bias=hp.convnorm_bias, w_init_gain=hp.convnorm_w_init_gain):
+                 padding=hp.convnorm_padding, dilation=hp.convnorm_dilation, bias=hp.convnorm_bias,
+                 w_init_gain=hp.convnorm_w_init_gain):
         super(ConvNorm, self).__init__()
         if padding is None:
-            assert(kernel_size % 2 == 1)
+            assert (kernel_size % 2 == 1)
             padding = int(dilation * (kernel_size - 1) / 2)
 
         self.conv = nn.Conv1d(in_channels, out_channels,
@@ -112,14 +114,50 @@ class Embeddings(nn.Module):
 class EncoderPrenet(nn.Module):
     def __init__(self, in_channels, out_channels, dropout):
         super(EncoderPrenet, self).__init__()
-        self.modules = nn.ModuleList([nn.Sequential(
-            ConvNorm(in_channels, out_channels),
-            nn.BatchNorm1d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.Dropout(dropout)
-        ) for _ in range(hp.encoder_n_conv)])
+
+        self.conv1 = nn.Sequential(ConvNorm(in_channels, out_channels),
+                                   nn.BatchNorm1d(out_channels),
+                                   nn.ReLU(inplace=True), nn.Dropout(dropout, inplace=True))
+        self.convs = nn.ModuleList([self.conv1])
+        for i in range(hp.encoder_n_conv - 1):
+            self.convs.append(nn.Sequential(ConvNorm(out_channels, out_channels),
+                                            nn.BatchNorm1d(out_channels),
+                                            nn.ReLU(inplace=True), nn.Dropout(dropout, inplace=True)))
 
     def forward(self, x):
-        for module in self.modules:
-            x = module(x)
+        for m in self.convs:
+            x = m(x)
         return x
+
+
+if __name__ == '__main__':
+    import attention
+    import model
+    import numpy as np
+
+    vocab = utils.build_phone_vocab(['hello world!'])
+    print(vocab)
+    embed = Embeddings(512, len(vocab))
+    prenet = EncoderPrenet(512, 512, 0.1)
+    print(prenet)
+
+    c = copy.deepcopy
+    attn = attention.MultiHeadedAttention(8, 512)
+    ff = model.PositionwiseFeedForward(512, 256, 0.1)
+
+    encoder = Encoder(EncoderLayer(512, c(attn), c(ff), 0.1), 6)
+
+    model = nn.ModuleList([embed, prenet, encoder])
+    x = [p for p in utils.phoneme('hello world!').split(' ') if p]
+    t = np.array([np.zeros(len(vocab)) for _ in x])
+    for i, p in enumerate(x):
+        t[i][vocab[p]] = 1
+
+    t = torch.tensor(t, dtype=torch.long)
+    print(t.size())
+    emb = embed(t).unsqueeze(0)
+    print(emb.size())
+    pre = prenet(emb)
+    print(pre.size())
+    enc = encoder(pre)
+    print(enc.size())

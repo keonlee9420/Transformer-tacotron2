@@ -11,7 +11,7 @@ def build_phone_vocab(texts):
              '</s>': 3, }
     idx = 4
     for text in texts:
-        phoneset = phoneme(text).split(' ')
+        phoneset = [p for p in phoneme(text).split(' ') if p]
 
         for phone in phoneset:
             if phone.strip() not in vocab:
