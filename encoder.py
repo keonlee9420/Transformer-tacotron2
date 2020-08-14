@@ -148,16 +148,13 @@ if __name__ == '__main__':
     encoder = Encoder(EncoderLayer(512, c(attn), c(ff), 0.1), 6)
 
     model = nn.ModuleList([embed, prenet, encoder])
-    x = [p for p in utils.phoneme('hello world!').split(' ') if p]
-    t = np.array([np.zeros(len(vocab)) for _ in x])
-    for i, p in enumerate(x):
-        t[i][vocab[p]] = 1
+    x = [vocab[p] for p in utils.phoneme('hello world!').split(' ') if p]
 
-    t = torch.tensor(t, dtype=torch.long)
-    print(t.size())
-    emb = embed(t).unsqueeze(0)
+    x = torch.tensor(x, dtype=torch.long)
+    print(x.size())
+    emb = embed(x).unsqueeze(-1)
     print(emb.size())
     pre = prenet(emb)
     print(pre.size())
-    enc = encoder(pre)
+    enc = encoder(pre, pre)
     print(enc.size())
