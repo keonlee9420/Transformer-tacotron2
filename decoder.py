@@ -4,7 +4,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from encoder import clones, LayerNorm, ConvNorm, SublayerConnection
+from encoder import clones, LayerNorm, ConvNorm, SublayerConnection, sample_encoding
 import hyperparams as hp
 
 
@@ -177,18 +177,18 @@ if __name__ == "__main__":
     from utils import *
 
     PAD_TOKEN = 0
-    START_TOKEN = 2
-    END_TOKEN = 3
+    # START_TOKEN = 2
+    # END_TOKEN = 3
 
     sample_batch = 10
     print("TOTAL BATCH: {}".format(sample_batch))
 
-    seq_maxlen = 112
+    print("\n-------------- mel-preprocessing --------------")
     audio_dirs = ['/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'\
         .format((4-len(str(i+1)))*'0' + str(i+1)) for i in range(sample_batch)]
     
     mel_batch = torch.tensor(pad_mel([get_mel(audio_dir) for audio_dir in audio_dirs], pad_token=PAD_TOKEN))
-    print("\nmel_batch.shape:\n", mel_batch.shape) # (batch, n_frames, mel_channels)
+    print("mel_batch.shape:\n", mel_batch.shape) # (batch, n_frames, mel_channels)
 
     #save spectrogram
     for i in range(mel_batch.shape[0]):
@@ -208,12 +208,16 @@ if __name__ == "__main__":
     position = PositionalEncoding(hp.model_dim, 0.1)
     decoder = Decoder(DecoderLayer(hp.model_dim, c(attn), c(attn), c(ff), 0.1), 6)
 
+    print("\n-------------- encoder --------------")
+    # sample encoding
+    memory, seq_maxlen = sample_encoding(sample_batch)
+
     print("\n-------------- pre-decoder --------------")
     decoder_input = decoder.decoder_prenet(mel_batch)
     print("decoder_input.shape:\n", decoder_input.shape) # (batch, n_frames, model_dim)
 
     print("\n-------------- decoder --------------")
-    memory = torch.ones((sample_batch, seq_maxlen, hp.model_dim))
+    # memory = torch.ones((sample_batch, seq_maxlen, hp.model_dim)) # only for decoder without encoder
     print("memory.shape:\n", memory.shape) # encoder output, (batch, n_sequences, model_dim)
 
     mal_maxlen = mel_batch.shape[1]

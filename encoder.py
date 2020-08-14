@@ -136,10 +136,10 @@ def sample_encoding(sample_batch):
     import hyperparams as hp
 
     vocab = utils.build_phone_vocab(['hello world!'])
-    print(vocab)
+    print("vocab:\n", vocab)
     embed = Embeddings(hp.embedding_dim, len(vocab))
     prenet = EncoderPrenet(hp.model_dim, hp.model_dim, hp.model_dropout)
-    print(prenet)
+    # print(prenet)
 
     c = copy.deepcopy
     attn = attention.MultiHeadedAttention(hp.num_heads, hp.model_dim)
@@ -152,15 +152,15 @@ def sample_encoding(sample_batch):
     x = torch.tensor(x, dtype=torch.long)
     seq_len = x.shape[0]
     
-    print(x.size())
+    print("phoneme_size: ", x.size())
     emb = embed(x).unsqueeze(0)
     emb_batch = torch.cat([emb for _ in range(sample_batch)], 0)
-    print(emb_batch.size())
+    print("embedding batch size: ", emb_batch.size())
     pre = prenet(emb_batch.transpose(-2, -1))
-    print(pre.size())
+    print("prenet output size: ", pre.size())
     encoder_input = pre.transpose(-2, -1)
     memory = encoder(encoder_input, torch.ones(sample_batch, 1, seq_len))
-    print(memory.size())
+    print("memory size: ", memory.size())
 
     return memory, seq_len
 
