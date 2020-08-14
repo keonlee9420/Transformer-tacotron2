@@ -28,9 +28,13 @@ class EncoderDecoder(nn.Module):
                            tgt, tgt_mask)
 
     def encode(self, src, src_mask):
+        print("ENCODER INPUT shape:", self.src_embed(src).shape)
+        print("ENCODER OUTPUT shape:", self.encoder(self.src_embed(src), src_mask).shape)
         return self.encoder(self.src_embed(src), src_mask)
 
     def decode(self, memory, src_mask, tgt, tgt_mask):
+        print("DECODER INPUT shape:", self.tgt_embed(tgt).shape)
+        print("DECODER OUTPUT shape:", self.decoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask).shape)
         return self.decoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask)
 
 
@@ -64,6 +68,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout, max_len=hp.positional_encoding_max_len):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
+        self.alpha = nn.Parameter(torch.ones(1))
 
         # Compute the positional encodings once in log space.
         pe = torch.zeros(max_len, d_model)
@@ -76,5 +81,5 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        x = x + self.pe[:, :x.size(1)]
+        x = x + self.alpha * self.pe[:, :x.size(1)]
         return self.dropout(x)

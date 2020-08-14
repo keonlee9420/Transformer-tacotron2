@@ -15,10 +15,11 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.layers = clones(layer, N)
         self.norm = LayerNorm(layer.size)
-        # self.decoder_prenet = DecoderPrenet(input_dim, hidden_dim, output_dim, dropout)
-        # self.mel_linear = MelLinear()
-        # self.stop_linear = StopLinear()
-        # self.decoder_postnet = Postnet()
+        self.decoder_prenet = DecoderPrenet(
+            hp.mel_channels, hp.hidden_dim, hp.model_dim, hp.pre_dropout)
+        self.mel_linear = MelLinear(hp.model_dim, hp.mel_channels)
+        self.stop_linear = StopLinear(hp.model_dim)
+        self.decoder_postnet = Postnet(hp.mel_channels, hp.hidden_dim)
 
     def forward(self, x, memory, src_mask, tgt_mask):
         for layer in self.layers:
@@ -43,13 +44,6 @@ class DecoderLayer(nn.Module):
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, tgt_mask))
         x = self.sublayer[1](x, lambda x: self.src_attn(x, m, m, src_mask))
         return self.sublayer[2](x, self.feed_forward)
-
-
-def subsequent_mask(size):
-    """Mask out subsequent positions."""
-    attn_shape = (1, size, size)
-    mask = np.triu(np.ones(attn_shape), k=1).astype('uint8')
-    return torch.from_numpy(mask) == 0
 
 
 def greedy_decode(model, src, src_mask, max_len, start_symbol):
@@ -91,12 +85,27 @@ class DecoderPrenet(nn.Module):
         return self.layer(decoder_input)
 
 
+class Linear(nn.Module):
+    """Linear Module."""
+
+    def __init__(self, in_dim, out_dim, bias=True, w_init='linear'):
+        super(Linear, self).__init__()
+        self.linear_layer = nn.Linear(in_dim, out_dim, bias=bias)
+
+        nn.init.xavier_uniform_(
+            self.linear_layer.weight,
+            gain=nn.init.calculate_gain(w_init))
+
+    def forward(self, x):
+        return self.linear_layer(x)
+
+
 class MelLinear(nn.Module):
     """Linear projections to predict the mel spectrogram same as Tacotron2."""
 
     def __init__(self, num_hidden, mel_channels):
         super(MelLinear, self).__init__()
-        self.mel_linear = nn.Linear(num_hidden, mel_channels)
+        self.mel_linear = Linear(num_hidden, mel_channels)
 
     def forward(self, decoder_input):
         return self.mel_linear(decoder_input)
@@ -107,7 +116,7 @@ class StopLinear(nn.Module):
 
     def __init__(self, num_hidden):
         super(StopLinear, self).__init__()
-        self.stop_linear = nn.Linear(num_hidden, 1, w_init='sigmoid')
+        self.stop_linear = Linear(num_hidden, 1, w_init='sigmoid')
 
     def forward(self, decoder_input):
         return self.stop_linear(decoder_input)
@@ -116,7 +125,7 @@ class StopLinear(nn.Module):
 class Postnet(nn.Module):
     """Linear projections to produce a residual to refine the reconstruction of mel spectrogram same as Tacotron2."""
 
-    def __init__(self, mel_channels, hidden_dim, kernel_size, num_conv=hp.post_num_conv, dropout=hp.post_dropout):
+    def __init__(self, mel_channels, hidden_dim, kernel_size=hp.post_kernel_size, num_conv=hp.post_num_conv, dropout=hp.post_dropout):
         super(Postnet, self).__init__()
         self.mel_channels = mel_channels
         self.hidden_dim = hidden_dim
@@ -162,3 +171,65 @@ class Postnet(nn.Module):
         x = self.dropout(self.convolutions[-1](x))
 
         return x
+
+
+if __name__ == "__main__":
+    from utils import *
+
+    PAD_TOKEN = 0
+    START_TOKEN = 2
+    END_TOKEN = 3
+
+    sample_batch = 10
+    print("TOTAL BATCH: {}".format(sample_batch))
+
+    seq_maxlen = 112
+    audio_dirs = ['/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'\
+        .format((4-len(str(i+1)))*'0' + str(i+1)) for i in range(sample_batch)]
+    
+    mel_batch = torch.tensor(pad_mel([get_mel(audio_dir) for audio_dir in audio_dirs], pad_token=PAD_TOKEN))
+    print("\nmel_batch.shape:\n", mel_batch.shape) # (batch, n_frames, mel_channels)
+
+    #save spectrogram
+    for i in range(mel_batch.shape[0]):
+        print("{}th mel_spec saved".format(i+1), mel_batch[i].T.shape)
+        save_mel(i+1, mel_batch[i].T)
+    print("Save ALL!\n")
+
+    from attention import *
+    from model import *
+    from encoder import *
+    from decoder import *
+    import hyperparams as hp
+
+    c = copy.deepcopy
+    attn = MultiHeadedAttention(8, hp.model_dim)
+    ff = PositionwiseFeedForward(hp.model_dim, hp.hidden_dim, 0.1)
+    position = PositionalEncoding(hp.model_dim, 0.1)
+    decoder = Decoder(DecoderLayer(hp.model_dim, c(attn), c(attn), c(ff), 0.1), 6)
+
+    print("\n-------------- pre-decoder --------------")
+    decoder_input = decoder.decoder_prenet(mel_batch)
+    print("decoder_input.shape:\n", decoder_input.shape) # (batch, n_frames, model_dim)
+
+    print("\n-------------- decoder --------------")
+    memory = torch.ones((sample_batch, seq_maxlen, hp.model_dim))
+    print("memory.shape:\n", memory.shape) # encoder output, (batch, n_sequences, model_dim)
+
+    mal_maxlen = mel_batch.shape[1]
+    # from schedule import *
+    # batch = Batch(torch.ones((sample_batch, seq_maxlen)), torch.ones((sample_batch, mal_maxlen)))
+    # print("Batch.src, trg: ", batch.src.shape, batch.trg.shape)
+    # print("Batch.src_mask, trg_mask: ", batch.src_mask.shape, batch.trg_mask.shape)
+    decoder_input = decoder(decoder_input, memory, \
+        torch.ones((sample_batch, 1, seq_maxlen)), torch.ones((sample_batch, mal_maxlen, mal_maxlen)))
+    print("decoder OUTPUT.shape:\n:", decoder_input.shape)
+
+    print("\n-------------- post-decoder --------------")
+    mel_linear_output = decoder.mel_linear(decoder_input)
+    print("MEL LINEAR~", mel_linear_output.shape)
+    stop_linear = decoder.stop_linear(decoder_input)
+    print("STOP LINEAR~", stop_linear.shape)
+
+    decoder_postnet = decoder.decoder_postnet(mel_linear_output.transpose(-2, -1))
+    print("decoder_postnet.shape:", decoder_postnet.shape)

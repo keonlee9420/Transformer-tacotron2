@@ -12,6 +12,16 @@ batch_size = 30
 # Audio Parameters             #
 ################################
 mel_channels = 80
+hidden_dim = 256
+n_fft = 2048
+sr = 22050
+preemphasis = 0.97
+frame_shift = 0.0125
+frame_length = 0.05
+hop_length = int(sr*frame_shift)
+win_length = int(sr*frame_length)
+max_db = 100
+ref_db = 20
 
 ################################
 # Model Parameters             #
@@ -41,6 +51,8 @@ position_ffn_dropout = 0.1
 positional_encoding_max_len = 5000
 
 # Decoder parameters
+pre_dropout = 0.2
+post_kernel_size = 5
 post_num_conv = 5
 post_dropout = 0.1
 
