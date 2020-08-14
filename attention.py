@@ -11,14 +11,19 @@ import hyperparams as hp
 
 def attention(query, key, value, mask=None, dropout=None):
     """Compute 'Scaled Dot Product Attention'"""
+    # print("QUERY, KEY, VALUE shape in attention:\n",query.shape, key.shape, value.shape)
     d_k = query.size(-1)
     scores = torch.matmul(query, key.transpose(-2, -1)) \
         / math.sqrt(d_k)
+    # print("scores.shape1:", scores.shape)
+    # print("mask.shape:", mask.shape)
     if mask is not None:
         scores = scores.masked_fill(mask == 0, -1e9)
+    # print("scores.shape2:", scores.shape)
     p_attn = F.softmax(scores, dim=-1)
     if dropout is not None:
         p_attn = dropout(p_attn)
+    # print("p_attn, value shape", p_attn.shape, value.shape)
     return torch.matmul(p_attn, value), p_attn
 
 

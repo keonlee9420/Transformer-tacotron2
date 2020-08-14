@@ -60,6 +60,8 @@ def run_epoch(data_iter, model, loss_compute, begin_time):
     total_loss = 0
     tokens = 0
     for i, batch in enumerate(data_iter):
+        print("INNER run_epoch: ", batch.src.shape, batch.trg.shape)
+        print("INNER run_epoch: ", batch.src_mask.shape, batch.trg_mask.shape)
         out = model.forward(batch.src, batch.trg,
                             batch.src_mask, batch.trg_mask)
         loss = loss_compute(out, batch.trg_y, batch.ntokens)

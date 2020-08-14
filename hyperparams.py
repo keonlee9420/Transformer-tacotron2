@@ -13,6 +13,15 @@ batch_size = 30
 ################################
 mel_channels = 80
 hidden_dim = 256
+n_fft = 2048
+sr = 22050
+preemphasis = 0.97
+frame_shift = 0.0125
+frame_length = 0.05
+hop_length = int(sr*frame_shift)
+win_length = int(sr*frame_length)
+max_db = 100
+ref_db = 20
 
 ################################
 # Model Parameters             #

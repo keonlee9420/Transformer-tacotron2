@@ -4,7 +4,6 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from decoder import subsequent_mask
 
 from torchtext import data, datasets
 
@@ -88,6 +87,13 @@ class Batch:
         tgt_mask = tgt_mask & subsequent_mask(
             tgt.size(-1)).type_as(tgt_mask.data)
         return tgt_mask
+
+
+def subsequent_mask(size):
+    """Mask out subsequent positions."""
+    attn_shape = (1, size, size)
+    mask = np.triu(np.ones(attn_shape), k=1).astype('uint8')
+    return torch.from_numpy(mask) == 0
 
 
 def data_gen(V, batch, nbatches, device):
