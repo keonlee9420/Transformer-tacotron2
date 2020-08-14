@@ -129,32 +129,40 @@ class EncoderPrenet(nn.Module):
             x = m(x)
         return x
 
-
-if __name__ == '__main__':
+def sample_encoding(sample_batch):
     import attention
     import model
     import numpy as np
+    import hyperparams as hp
 
     vocab = utils.build_phone_vocab(['hello world!'])
     print(vocab)
-    embed = Embeddings(512, len(vocab))
-    prenet = EncoderPrenet(512, 512, 0.1)
+    embed = Embeddings(hp.embedding_dim, len(vocab))
+    prenet = EncoderPrenet(hp.model_dim, hp.model_dim, hp.model_dropout)
     print(prenet)
 
     c = copy.deepcopy
-    attn = attention.MultiHeadedAttention(8, 512)
-    ff = model.PositionwiseFeedForward(512, 256, 0.1)
+    attn = attention.MultiHeadedAttention(hp.num_heads, hp.model_dim)
+    ff = model.PositionwiseFeedForward(hp.model_dim, hp.hidden_dim, hp.model_dropout)
 
-    encoder = Encoder(EncoderLayer(512, c(attn), c(ff), 0.1), 6)
+    encoder = Encoder(EncoderLayer(hp.model_dim, c(attn), c(ff), hp.model_dropout), hp.num_layers)
 
-    model = nn.ModuleList([embed, prenet, encoder])
     x = [vocab[p] for p in utils.phoneme('hello world!').split(' ') if p]
 
     x = torch.tensor(x, dtype=torch.long)
+    seq_len = x.shape[0]
+    
     print(x.size())
-    emb = embed(x).unsqueeze(-1)
-    print(emb.size())
-    pre = prenet(emb)
+    emb = embed(x).unsqueeze(0)
+    emb_batch = torch.cat([emb for _ in range(sample_batch)], 0)
+    print(emb_batch.size())
+    pre = prenet(emb_batch.transpose(-2, -1))
     print(pre.size())
-    enc = encoder(pre, pre)
-    print(enc.size())
+    encoder_input = pre.transpose(-2, -1)
+    memory = encoder(encoder_input, torch.ones(sample_batch, 1, seq_len))
+    print(memory.size())
+
+    return memory, seq_len
+
+if __name__ == '__main__':
+    memory, seq_len = sample_encoding(10)
