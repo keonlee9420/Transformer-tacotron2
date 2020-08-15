@@ -4,6 +4,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+from model import PositionalEncoding
 from encoder import clones, LayerNorm, ConvNorm, SublayerConnection, sample_encoding
 import hyperparams as hp
 
@@ -15,6 +16,7 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.layers = clones(layer, N)
         self.norm = LayerNorm(layer.size)
+        self.pos = PositionalEncoding(hp.model_dim, hp.model_dropout)
         self.decoder_prenet = DecoderPrenet(
             hp.mel_channels, hp.hidden_dim, hp.model_dim, hp.pre_dropout)
         self.mel_linear = MelLinear(hp.model_dim, hp.mel_channels)
@@ -26,6 +28,7 @@ class Decoder(nn.Module):
         x = self.decoder_prenet(x)  # x: mel_batch
 
         # positional encoding
+        x = self.pos(x)
 
         # decoder
         for layer in self.layers:
