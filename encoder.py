@@ -16,6 +16,21 @@ def clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])
 
 
+class Linear(nn.Module):
+    """Linear Module."""
+
+    def __init__(self, in_dim, out_dim, bias=True, w_init='linear'):
+        super(Linear, self).__init__()
+        self.linear_layer = nn.Linear(in_dim, out_dim, bias=bias)
+
+        nn.init.xavier_uniform_(
+            self.linear_layer.weight,
+            gain=nn.init.calculate_gain(w_init))
+
+    def forward(self, x):
+        return self.linear_layer(x)
+
+
 class LayerNorm(nn.Module):
     """Construct a layernorm module (See citation for details)."""
 
@@ -62,6 +77,7 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         self.layers = clones(layer, N)
         self.norm = LayerNorm(layer.size)
+        self.centering = Linear(hp.model_dim, hp.model_dim)
         self.pos = PositionalEncoding(hp.model_dim, hp.model_dropout)
         self.encoder_prenet = EncoderPrenet(
             hp.model_dim, hp.model_dim, hp.model_dropout)
@@ -71,6 +87,9 @@ class Encoder(nn.Module):
         # prenet
         x = self.encoder_prenet(x.transpose(-2, -1))
         x = x.transpose(-2, -1)
+
+        # center consistency
+        x = self.centering(x)
 
         # positional encoding
         x = self.pos(x)

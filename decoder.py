@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from schedule import subsequent_mask
 from model import PositionalEncoding
-from encoder import clones, LayerNorm, ConvNorm, SublayerConnection, sample_encoding
+from encoder import clones,Linear, LayerNorm, ConvNorm, SublayerConnection, sample_encoding
 import hyperparams as hp
 
 
@@ -17,6 +17,7 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.layers = clones(layer, N)
         self.norm = LayerNorm(layer.size)
+        self.centering = Linear(hp.model_dim, hp.model_dim)
         self.pos = PositionalEncoding(hp.model_dim, hp.model_dropout)
         self.decoder_prenet = DecoderPrenet(
             hp.mel_channels, hp.hidden_dim, hp.model_dim, hp.pre_dropout)
@@ -27,6 +28,9 @@ class Decoder(nn.Module):
     def forward(self, x, memory, src_mask, tgt_mask):
         # prenet
         x = self.decoder_prenet(x)  # x: mel_batch
+
+        # center consistency
+        x = self.centering(x)
 
         # positional encoding
         x = self.pos(x)
@@ -104,21 +108,6 @@ class DecoderPrenet(nn.Module):
 
     def forward(self, decoder_input):
         return self.layer(decoder_input)
-
-
-class Linear(nn.Module):
-    """Linear Module."""
-
-    def __init__(self, in_dim, out_dim, bias=True, w_init='linear'):
-        super(Linear, self).__init__()
-        self.linear_layer = nn.Linear(in_dim, out_dim, bias=bias)
-
-        nn.init.xavier_uniform_(
-            self.linear_layer.weight,
-            gain=nn.init.calculate_gain(w_init))
-
-    def forward(self, x):
-        return self.linear_layer(x)
 
 
 class MelLinear(nn.Module):
@@ -257,7 +246,8 @@ if __name__ == "__main__":
     from schedule import *
     batch = Batch(torch.ones((sample_batch, 14)), mel_batch)
     print("Batch.src, trg: ", batch.src.shape, batch.trg.shape)
-    print("Batch.src_mask, trg_mask: ", batch.src_mask.shape, batch.trg_mask.shape)
+    print("Batch.src_mask, trg_mask: ",
+          batch.src_mask.shape, batch.trg_mask.shape)
     print("Batch.nframes:", batch.nframes)
     # decoder_input = decoder(decoder_input, memory, \
     #     torch.ones((sample_batch, 1, seq_maxlen)), torch.ones((sample_batch, mel_maxlen, mel_maxlen)))
