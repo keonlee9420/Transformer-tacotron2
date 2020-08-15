@@ -22,9 +22,26 @@ class Decoder(nn.Module):
         self.decoder_postnet = Postnet(hp.mel_channels, hp.hidden_dim)
 
     def forward(self, x, memory, src_mask, tgt_mask):
+        # prenet
+        x = self.decoder_prenet(x)  # x: mel_batch
+
+        # positional encoding
+
+        # decoder
         for layer in self.layers:
             x = layer(x, memory, src_mask, tgt_mask)
-        return self.norm(x)
+        x = self.norm(x)
+
+        # mel linear
+        mel_linear = self.mel_linear(x)
+
+        # stop linear
+        stop_tokens = self.stop_linear(x)
+
+        # postnet
+        mels = self.decoder_postnet(mel_linear.transpose(-2, -1))
+
+        return mels, stop_tokens
 
 
 class DecoderLayer(nn.Module):
@@ -184,17 +201,20 @@ if __name__ == "__main__":
     print("TOTAL BATCH: {}".format(sample_batch))
 
     print("\n-------------- mel-preprocessing --------------")
-    audio_dirs = ['/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'\
-        .format((4-len(str(i+1)))*'0' + str(i+1)) for i in range(sample_batch)]
-    
-    mel_batch = torch.tensor(pad_mel([get_mel(audio_dir) for audio_dir in audio_dirs], pad_token=PAD_TOKEN))
-    print("mel_batch.shape:\n", mel_batch.shape) # (batch, n_frames, mel_channels)
+    audio_dirs = ['/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'
+                  .format((4-len(str(i+1)))*'0' + str(i+1)) for i in range(sample_batch)]
 
-    #save spectrogram
-    for i in range(mel_batch.shape[0]):
-        print("{}th mel_spec saved".format(i+1), mel_batch[i].T.shape)
-        save_mel(i+1, mel_batch[i].T)
-    print("Save ALL!\n")
+    mel_batch = torch.tensor(
+        pad_mel([get_mel(audio_dir) for audio_dir in audio_dirs], pad_token=PAD_TOKEN))
+    mal_maxlen = mel_batch.shape[1]
+    # (batch, n_frames, mel_channels)
+    print("mel_batch.shape:\n", mel_batch.shape)
+
+    # # save spectrogram
+    # for i in range(mel_batch.shape[0]):
+    #     print("{}th mel_spec saved".format(i+1), mel_batch[i].T.shape)
+    #     save_mel(i+1, mel_batch[i].T)
+    # print("Save ALL!\n")
 
     from attention import *
     from model import *
@@ -206,34 +226,42 @@ if __name__ == "__main__":
     attn = MultiHeadedAttention(8, hp.model_dim)
     ff = PositionwiseFeedForward(hp.model_dim, hp.hidden_dim, 0.1)
     position = PositionalEncoding(hp.model_dim, 0.1)
-    decoder = Decoder(DecoderLayer(hp.model_dim, c(attn), c(attn), c(ff), 0.1), 6)
+    decoder = Decoder(DecoderLayer(
+        hp.model_dim, c(attn), c(attn), c(ff), 0.1), 6)
 
     print("\n-------------- encoder --------------")
     # sample encoding
     memory, seq_maxlen = sample_encoding(sample_batch)
-
-    print("\n-------------- pre-decoder --------------")
-    decoder_input = decoder.decoder_prenet(mel_batch)
-    print("decoder_input.shape:\n", decoder_input.shape) # (batch, n_frames, model_dim)
+    # encoder output, (batch, n_sequences, model_dim)
+    print("memory.shape:\n", memory.shape)
 
     print("\n-------------- decoder --------------")
-    # memory = torch.ones((sample_batch, seq_maxlen, hp.model_dim)) # only for decoder without encoder
-    print("memory.shape:\n", memory.shape) # encoder output, (batch, n_sequences, model_dim)
+    mels, stop_tokens = decoder(mel_batch, memory,
+                                torch.ones((sample_batch, 1, seq_maxlen)), torch.ones((sample_batch, mal_maxlen, mal_maxlen)))
+    print("decoderoutput mels, stop_tokens\n:", mels.shape, stop_tokens.shape)
 
-    mal_maxlen = mel_batch.shape[1]
-    # from schedule import *
-    # batch = Batch(torch.ones((sample_batch, seq_maxlen)), torch.ones((sample_batch, mal_maxlen)))
-    # print("Batch.src, trg: ", batch.src.shape, batch.trg.shape)
-    # print("Batch.src_mask, trg_mask: ", batch.src_mask.shape, batch.trg_mask.shape)
-    decoder_input = decoder(decoder_input, memory, \
-        torch.ones((sample_batch, 1, seq_maxlen)), torch.ones((sample_batch, mal_maxlen, mal_maxlen)))
-    print("decoder OUTPUT.shape:\n:", decoder_input.shape)
+    # print("\n-------------- pre-decoder --------------")
+    # decoder_input = decoder.decoder_prenet(mel_batch)
+    # print("decoder_input.shape:\n", decoder_input.shape) # (batch, n_frames, model_dim)
 
-    print("\n-------------- post-decoder --------------")
-    mel_linear_output = decoder.mel_linear(decoder_input)
-    print("MEL LINEAR~", mel_linear_output.shape)
-    stop_linear = decoder.stop_linear(decoder_input)
-    print("STOP LINEAR~", stop_linear.shape)
+    # print("\n-------------- decoder --------------")
+    # # memory = torch.ones((sample_batch, seq_maxlen, hp.model_dim)) # only for decoder without encoder
+    # print("memory.shape:\n", memory.shape) # encoder output, (batch, n_sequences, model_dim)
 
-    decoder_postnet = decoder.decoder_postnet(mel_linear_output.transpose(-2, -1))
-    print("decoder_postnet.shape:", decoder_postnet.shape)
+    # mal_maxlen = mel_batch.shape[1]
+    # # from schedule import *
+    # # batch = Batch(torch.ones((sample_batch, seq_maxlen)), torch.ones((sample_batch, mal_maxlen)))
+    # # print("Batch.src, trg: ", batch.src.shape, batch.trg.shape)
+    # # print("Batch.src_mask, trg_mask: ", batch.src_mask.shape, batch.trg_mask.shape)
+    # decoder_input = decoder(decoder_input, memory, \
+    #     torch.ones((sample_batch, 1, seq_maxlen)), torch.ones((sample_batch, mal_maxlen, mal_maxlen)))
+    # print("decoder OUTPUT.shape:\n:", decoder_input.shape)
+
+    # print("\n-------------- post-decoder --------------")
+    # mel_linear_output = decoder.mel_linear(decoder_input)
+    # print("MEL LINEAR~", mel_linear_output.shape)
+    # stop_linear = decoder.stop_linear(decoder_input)
+    # print("STOP LINEAR~", stop_linear.shape)
+
+    # decoder_postnet = decoder.decoder_postnet(mel_linear_output.transpose(-2, -1))
+    # print("decoder_postnet.shape:", decoder_postnet.shape)

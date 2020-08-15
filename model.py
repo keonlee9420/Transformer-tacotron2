@@ -28,13 +28,13 @@ class EncoderDecoder(nn.Module):
                            tgt, tgt_mask)
 
     def encode(self, src, src_mask):
-        print("ENCODER INPUT shape:", self.src_embed(src).shape)
-        print("ENCODER OUTPUT shape:", self.encoder(self.src_embed(src), src_mask).shape)
+        # print("ENCODER INPUT shape:", self.src_embed(src).shape)
+        # print("ENCODER OUTPUT shape:", self.encoder(self.src_embed(src), src_mask).shape)
         return self.encoder(self.src_embed(src), src_mask)
 
     def decode(self, memory, src_mask, tgt, tgt_mask):
-        print("DECODER INPUT shape:", self.tgt_embed(tgt).shape)
-        print("DECODER OUTPUT shape:", self.decoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask).shape)
+        # print("DECODER INPUT shape:", self.tgt_embed(tgt).shape)
+        # print("DECODER OUTPUT shape:", self.decoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask).shape)
         return self.decoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask)
 
 
