@@ -6,6 +6,7 @@ import torch.nn as nn
 import copy
 import math
 import hyperparams as hp
+from model import PositionalEncoding
 
 import utils
 
@@ -61,12 +62,25 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         self.layers = clones(layer, N)
         self.norm = LayerNorm(layer.size)
+        self.pos = PositionalEncoding(hp.model_dim, hp.model_dropout)
+        self.encoder_prenet = EncoderPrenet(
+            hp.model_dim, hp.model_dim, hp.model_dropout)
 
     def forward(self, x, mask):
         """Pass the input (and mask) through each layer in turn."""
+        # prenet
+        x = self.encoder_prenet(x.transpose(-2, -1))
+        x = x.transpose(-2, -1)
+
+        # positional encoding
+        x = self.pos(x)
+
+        # encoder
         for layer in self.layers:
             x = layer(x, mask)
-        return self.norm(x)
+        memory = self.norm(x)
+
+        return memory
 
 
 class SublayerConnection(nn.Module):
@@ -129,6 +143,7 @@ class EncoderPrenet(nn.Module):
             x = m(x)
         return x
 
+
 def sample_encoding(sample_batch):
     import attention
     import model
@@ -143,26 +158,32 @@ def sample_encoding(sample_batch):
 
     c = copy.deepcopy
     attn = attention.MultiHeadedAttention(hp.num_heads, hp.model_dim)
-    ff = model.PositionwiseFeedForward(hp.model_dim, hp.hidden_dim, hp.model_dropout)
+    ff = model.PositionwiseFeedForward(
+        hp.model_dim, hp.hidden_dim, hp.model_dropout)
 
-    encoder = Encoder(EncoderLayer(hp.model_dim, c(attn), c(ff), hp.model_dropout), hp.num_layers)
+    encoder = Encoder(EncoderLayer(hp.model_dim, c(
+        attn), c(ff), hp.model_dropout), hp.num_layers)
 
     x = [vocab[p] for p in utils.phoneme('hello world!').split(' ') if p]
 
     x = torch.tensor(x, dtype=torch.long)
     seq_len = x.shape[0]
-    
+
     print("phoneme_size: ", x.size())
     emb = embed(x).unsqueeze(0)
     emb_batch = torch.cat([emb for _ in range(sample_batch)], 0)
-    print("embedding batch size: ", emb_batch.size())
-    pre = prenet(emb_batch.transpose(-2, -1))
-    print("prenet output size: ", pre.size())
-    encoder_input = pre.transpose(-2, -1)
-    memory = encoder(encoder_input, torch.ones(sample_batch, 1, seq_len))
-    print("memory size: ", memory.size())
 
-    return memory, seq_len
+    src_mask = torch.ones(sample_batch, 1, seq_len)
+    memory = encoder(emb_batch, src_mask)
+    # print("embedding batch size: ", emb_batch.size())
+    # pre = prenet(emb_batch.transpose(-2, -1))
+    # print("prenet output size: ", pre.size())
+    # encoder_input = pre.transpose(-2, -1)
+    # memory = encoder(encoder_input, torch.ones(sample_batch, 1, seq_len))
+    # print("memory size: ", memory.size())
+
+    return memory, src_mask
+
 
 if __name__ == '__main__':
-    memory, seq_len = sample_encoding(10)
+    memory, src_mask = sample_encoding(10)

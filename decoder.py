@@ -226,21 +226,22 @@ if __name__ == "__main__":
     import hyperparams as hp
 
     c = copy.deepcopy
-    attn = MultiHeadedAttention(8, hp.model_dim)
-    ff = PositionwiseFeedForward(hp.model_dim, hp.hidden_dim, 0.1)
-    position = PositionalEncoding(hp.model_dim, 0.1)
+    attn = MultiHeadedAttention(hp.num_heads, hp.model_dim)
+    ff = PositionwiseFeedForward(hp.model_dim, hp.hidden_dim, hp.model_dropout)
+    position = PositionalEncoding(hp.model_dim, hp.model_dropout)
     decoder = Decoder(DecoderLayer(
-        hp.model_dim, c(attn), c(attn), c(ff), 0.1), 6)
+        hp.model_dim, c(attn), c(attn), c(ff), hp.model_dropout), hp.num_layers)
 
     print("\n-------------- encoder --------------")
     # sample encoding
-    memory, seq_maxlen = sample_encoding(sample_batch)
+    memory, src_mask = sample_encoding(sample_batch)
     # encoder output, (batch, n_sequences, model_dim)
     print("memory.shape:\n", memory.shape)
 
     print("\n-------------- decoder --------------")
+    tgt_mask = torch.ones((sample_batch, mal_maxlen, mal_maxlen))
     mels, stop_tokens = decoder(mel_batch, memory,
-                                torch.ones((sample_batch, 1, seq_maxlen)), torch.ones((sample_batch, mal_maxlen, mal_maxlen)))
+                                src_mask, tgt_mask)
     print("decoderoutput mels, stop_tokens\n:", mels.shape, stop_tokens.shape)
 
     # print("\n-------------- pre-decoder --------------")
