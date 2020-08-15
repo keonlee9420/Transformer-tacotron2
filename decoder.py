@@ -4,6 +4,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+from schedule import subsequent_mask
 from model import PositionalEncoding
 from encoder import clones, LayerNorm, ConvNorm, SublayerConnection, sample_encoding
 import hyperparams as hp
@@ -209,7 +210,7 @@ if __name__ == "__main__":
 
     mel_batch = torch.tensor(
         pad_mel([get_mel(audio_dir) for audio_dir in audio_dirs], pad_token=PAD_TOKEN))
-    mal_maxlen = mel_batch.shape[1]
+    mel_maxlen = mel_batch.shape[1]
     # (batch, n_frames, mel_channels)
     print("mel_batch.shape:\n", mel_batch.shape)
 
@@ -239,7 +240,7 @@ if __name__ == "__main__":
     print("memory.shape:\n", memory.shape)
 
     print("\n-------------- decoder --------------")
-    tgt_mask = torch.ones((sample_batch, mal_maxlen, mal_maxlen))
+    tgt_mask = torch.ones((sample_batch, mel_maxlen, mel_maxlen))
     mels, stop_tokens = decoder(mel_batch, memory,
                                 src_mask, tgt_mask)
     print("decoderoutput mels, stop_tokens\n:", mels.shape, stop_tokens.shape)
@@ -252,13 +253,14 @@ if __name__ == "__main__":
     # # memory = torch.ones((sample_batch, seq_maxlen, hp.model_dim)) # only for decoder without encoder
     # print("memory.shape:\n", memory.shape) # encoder output, (batch, n_sequences, model_dim)
 
-    # mal_maxlen = mel_batch.shape[1]
-    # # from schedule import *
-    # # batch = Batch(torch.ones((sample_batch, seq_maxlen)), torch.ones((sample_batch, mal_maxlen)))
-    # # print("Batch.src, trg: ", batch.src.shape, batch.trg.shape)
-    # # print("Batch.src_mask, trg_mask: ", batch.src_mask.shape, batch.trg_mask.shape)
+    # mel_maxlen = mel_batch.shape[1]
+    from schedule import *
+    batch = Batch(torch.ones((sample_batch, 14)), mel_batch)
+    print("Batch.src, trg: ", batch.src.shape, batch.trg.shape)
+    print("Batch.src_mask, trg_mask: ", batch.src_mask.shape, batch.trg_mask.shape)
+    print("Batch.nframes:", batch.nframes)
     # decoder_input = decoder(decoder_input, memory, \
-    #     torch.ones((sample_batch, 1, seq_maxlen)), torch.ones((sample_batch, mal_maxlen, mal_maxlen)))
+    #     torch.ones((sample_batch, 1, seq_maxlen)), torch.ones((sample_batch, mel_maxlen, mel_maxlen)))
     # print("decoder OUTPUT.shape:\n:", decoder_input.shape)
 
     # print("\n-------------- post-decoder --------------")

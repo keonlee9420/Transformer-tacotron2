@@ -14,36 +14,38 @@ Options:
     --cuda                                  use GPU
     --simple-train                          train with a simple copy-task
     --spacy-train                           train with spacy en-de data
+    --simple-tt2                            train with a simple copy-task for Transformer-TTS
 """
 
 import sys
 import time
 from docopt import docopt
+import torch
+import torch.nn as nn
+from torchtext import data, datasets
 
 from attention import *
 from model import *
 from encoder import *
 from decoder import *
 from schedule import *
+from utils import *
 import hyperparams as hp
 
 import spacy
 
 
-def make_model(src_vocab, tgt_vocab, N=hp.num_layers,
+def make_model(src_vocab, N=hp.num_layers,
                d_model=hp.model_dim, d_ff=hp.d_ff, h=hp.num_heads, dropout=hp.model_dropout):
     """Helper: Construct a model from hyperparameters."""
     c = copy.deepcopy
     attn = MultiHeadedAttention(h, d_model)
     ff = PositionwiseFeedForward(d_model, d_ff, dropout)
-    position = PositionalEncoding(d_model, dropout)
     model = EncoderDecoder(
         Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
         Decoder(DecoderLayer(d_model, c(attn), c(attn),
                              c(ff), dropout), N),
-        nn.Sequential(Embeddings(d_model, src_vocab), c(position)),
-        nn.Sequential(Embeddings(d_model, tgt_vocab), c(position)),
-        Generator(d_model, tgt_vocab))
+        Embeddings(d_model, src_vocab))
 
     # This was important from their code.
     # Initialize parameters with Glorot / fan_avg.
@@ -60,8 +62,8 @@ def run_epoch(data_iter, model, loss_compute, begin_time):
     total_loss = 0
     tokens = 0
     for i, batch in enumerate(data_iter):
-        print("INNER run_epoch: ", batch.src.shape, batch.trg.shape)
-        print("INNER run_epoch: ", batch.src_mask.shape, batch.trg_mask.shape)
+        # print("INNER run_epoch: ", batch.src.shape, batch.trg.shape)
+        # print("INNER run_epoch: ", batch.src_mask.shape, batch.trg_mask.shape)
         out = model.forward(batch.src, batch.trg,
                             batch.src_mask, batch.trg_mask)
         loss = loss_compute(out, batch.trg_y, batch.ntokens)
@@ -208,6 +210,39 @@ if __name__ == "__main__":
                 break
             trans += sym + " "
         print(trans)
+
+    elif args['--simple-tt2']:
+
+        sample_batch = 3
+
+        # text-to-phoneme
+        import pandas as pd
+        csv_dir = '/home/keon/speech-datasets/LJSpeech-1.1/metadata.csv'
+        csv_data = pd.read_csv(csv_dir, sep='|', header=None)
+
+        texts = csv_data[1][:sample_batch]
+        print("texts.shape:", texts.shape)
+
+        phoneme_batch, vocab = phoneme_batch(texts)
+        print("phoneme_batch.shape:", phoneme_batch.shape) # (batch, max_seq_len)
+        print("vocab:\n", vocab)
+
+        # audio-to-mel
+        audio_dirs = ['/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'
+                      .format((4-len(str(i+1)))*'0' + str(i+1)) for i in range(sample_batch)]
+
+        mel_batch = mel_batch(audio_dirs)
+        print("mel_batch.shape:\n", mel_batch.shape) # (batch, max_frame_len, mel_channels)
+        
+        # build model
+        model = make_model(len(vocab), N=hp.num_layers)
+
+        # forward testing
+        batch = Batch(phoneme_batch, mel_batch)
+        mels, stop_tokens = model.forward(
+            batch.src, batch.trg, batch.src_mask, batch.trg_mask)
+        print("decoderoutput mels, stop_tokens\n:",
+              mels.shape, stop_tokens.shape)
 
     else:
         print("\n\nWhat else?\n\n")

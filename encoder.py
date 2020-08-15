@@ -152,7 +152,7 @@ def sample_encoding(sample_batch):
 
     vocab = utils.build_phone_vocab(['hello world!'])
     print("vocab:\n", vocab)
-    embed = Embeddings(hp.embedding_dim, len(vocab))
+    embed = Embeddings(hp.model_dim, len(vocab))
     prenet = EncoderPrenet(hp.model_dim, hp.model_dim, hp.model_dropout)
     # print(prenet)
 

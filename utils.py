@@ -33,6 +33,28 @@ def phoneme(text):
                      preserve_punctuation=True)
 
 
+def get_phoneme(text, vocab):
+    to_phoneme = [vocab[p] for p in phoneme(text).split(' ') if p]
+    return torch.tensor(to_phoneme)
+
+
+def pad_seq(seqs, pad_token=hp.pad_token):
+    padded_seqs = []
+    max_len = max((seq.shape[0] for seq in seqs))
+    for seq in seqs:
+        seq_len = seq.shape[0]
+        padded_seqs.append(np.pad(seq, (0, max_len - seq_len),
+                                  mode='constant', constant_values=pad_token))
+    return np.stack(padded_seqs)
+
+
+def phoneme_batch(texts):
+    vocab = build_phone_vocab(texts)
+    phoneme_batch = torch.tensor(
+        pad_seq([get_phoneme(text, vocab) for text in texts]))
+    return phoneme_batch, vocab
+
+
 def get_mel(audio_dir):
     y, sr = librosa.load(audio_dir, sr=hp.sr)
 
@@ -62,7 +84,7 @@ def get_mel(audio_dir):
     return mel_input
 
 
-def pad_mel(mels, pad_token):
+def pad_mel(mels, pad_token=hp.pad_token):
     padded_mels = []
     max_len = max((mel.shape[0] for mel in mels))
     for mel in mels:
@@ -71,6 +93,10 @@ def pad_mel(mels, pad_token):
             mel, [[0, max_len - mel_len], [0, 0]], mode='constant', constant_values=pad_token))
     return np.stack(padded_mels)
 
+
+def mel_batch(audio_dirs):
+    return torch.tensor(
+            pad_mel([get_mel(audio_dir) for audio_dir in audio_dirs]))
 
 def save_mel(idx, mel):
     plt.figure()
