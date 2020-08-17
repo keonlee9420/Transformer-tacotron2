@@ -106,6 +106,24 @@ def data_gen(V, batch, nbatches, device):
         yield Batch(src, tgt, 0)
 
 
+def data_prepare_tt2(batch_size, nbatches, random=False):
+    """Prepare data for a src-tgt copy task of tt2 given src and tgt batch."""
+    from utils import get_sample_batch
+    src, tgt, vocab = [], [], None
+    for _ in range(nbatches):
+        phoneme_batch, mel_batch, vocab = get_sample_batch(
+            batch_size, vocab, random)
+        src.append(phoneme_batch)
+        tgt.append(mel_batch)
+    return {'src': src, 'tgt': tgt, 'vocab': vocab}
+
+
+def data_gen_tt2(data, device):
+    """Generate data for a src-tgt copy task of tt2 given src and tgt batch."""
+    for phoneme_batch, mel_batch in zip(data['src'], data['tgt']):
+        yield Batch(phoneme_batch.to(device), mel_batch.to(device))
+
+
 class SimpleLossCompute:
     """A simple loss compute and train function."""
 
@@ -118,6 +136,22 @@ class SimpleLossCompute:
         x = self.generator(x)
         loss = self.criterion(x.contiguous().view(-1, x.size(-1)),
                               y.contiguous().view(-1)) / norm
+        loss.backward()
+        if self.opt is not None:
+            self.opt.step()
+            self.opt.optimizer.zero_grad()
+        return loss.data.item() * norm
+
+
+class SimpleTT2LossCompute:
+    """A simple loss compute and train function for tt2."""
+
+    def __init__(self, criterion, opt=None):
+        self.criterion = criterion
+        self.opt = opt
+
+    def __call__(self, x, y, norm):
+        loss = self.criterion(x, y)
         loss.backward()
         if self.opt is not None:
             self.opt.step()

@@ -8,6 +8,8 @@ pad_token = 0
 ################################
 # Data Parameters             #
 ################################
+csv_dir = '/home/keon/speech-datasets/LJSpeech-1.1/metadata.csv'
+audio_dir = '/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'
 
 ################################
 # Audio Parameters             #

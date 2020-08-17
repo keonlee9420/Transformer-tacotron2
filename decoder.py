@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from schedule import subsequent_mask
 from model import PositionalEncoding
-from encoder import clones,Linear, LayerNorm, ConvNorm, SublayerConnection, sample_encoding
+from encoder import clones, Linear, LayerNorm, ConvNorm, SublayerConnection, sample_encoding
 import hyperparams as hp
 
 
@@ -47,6 +47,7 @@ class Decoder(nn.Module):
         stop_tokens = self.stop_linear(x)
 
         # postnet
+        # (batch, mel_channels, n_frames)
         mels = self.decoder_postnet(mel_linear.transpose(-2, -1))
 
         return mels, stop_tokens
@@ -203,11 +204,8 @@ if __name__ == "__main__":
     # (batch, n_frames, mel_channels)
     print("mel_batch.shape:\n", mel_batch.shape)
 
-    # # save spectrogram
-    # for i in range(mel_batch.shape[0]):
-    #     print("{}th mel_spec saved".format(i+1), mel_batch[i].T.shape)
-    #     save_mel(i+1, mel_batch[i].T)
-    # print("Save ALL!\n")
+    # save spectrogram
+    save_mel(mel_batch)
 
     from attention import *
     from model import *

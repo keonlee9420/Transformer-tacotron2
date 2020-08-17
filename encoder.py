@@ -141,6 +141,9 @@ class Embeddings(nn.Module):
         self.d_model = d_model
 
     def forward(self, x):
+        # print("\n\nINNER EMBEDDINGS!")
+        # print(x.shape)
+        # print(self.lut(x).shape)
         return self.lut(x) * math.sqrt(self.d_model)
 
 
@@ -150,12 +153,12 @@ class EncoderPrenet(nn.Module):
 
         self.conv1 = nn.Sequential(ConvNorm(in_channels, out_channels),
                                    nn.BatchNorm1d(out_channels),
-                                   nn.ReLU(inplace=True), nn.Dropout(dropout, inplace=True))
+                                   nn.ReLU(), nn.Dropout(dropout))
         self.convs = nn.ModuleList([self.conv1])
         for i in range(hp.encoder_n_conv - 1):
             self.convs.append(nn.Sequential(ConvNorm(out_channels, out_channels),
                                             nn.BatchNorm1d(out_channels),
-                                            nn.ReLU(inplace=True), nn.Dropout(dropout, inplace=True)))
+                                            nn.ReLU(), nn.Dropout(dropout)))
 
     def forward(self, x):
         for m in self.convs:

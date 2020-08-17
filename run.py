@@ -58,25 +58,25 @@ def make_model(src_vocab, N=hp.num_layers,
 def run_epoch(data_iter, model, loss_compute, begin_time):
     """Standard Training and Logging Function"""
     start = time.time()
-    total_tokens = 0
+    total_frames = 0
     total_loss = 0
-    tokens = 0
+    frames = 0
     for i, batch in enumerate(data_iter):
         # print("INNER run_epoch: ", batch.src.shape, batch.trg.shape)
         # print("INNER run_epoch: ", batch.src_mask.shape, batch.trg_mask.shape)
-        out = model.forward(batch.src, batch.trg,
+        out, stop_tokens = model.forward(batch.src, batch.trg,
                             batch.src_mask, batch.trg_mask)
-        loss = loss_compute(out, batch.trg_y, batch.ntokens)
+        loss = loss_compute(out, batch.trg_y.transpose(-2, -1), batch.nframes)
         total_loss += loss.data
-        total_tokens += batch.ntokens
-        tokens += batch.ntokens
+        total_frames += batch.nframes
+        frames += batch.nframes
         if i % 50 == 1:
             elapsed = time.time() - start
-            print("Batch: %d Loss: %f Tokens per Sec: %f Total Sec: %.2f" %
-                  (i, loss / batch.ntokens, tokens / elapsed, time.time() - begin_time))
+            print("Batch: %d Loss: %f Franmes per Sec: %f Total Sec: %.2f" %
+                  (i, loss / batch.nframes, frames / elapsed, time.time() - begin_time))
             start = time.time()
-            tokens = 0
-    return total_loss / total_tokens
+            frames = 0
+    return total_loss / total_frames
 
 
 global max_src_in_batch, max_tgt_in_batch
@@ -213,36 +213,56 @@ if __name__ == "__main__":
 
     elif args['--simple-tt2']:
 
-        sample_batch = 3
-
-        # text-to-phoneme
-        import pandas as pd
-        csv_dir = '/home/keon/speech-datasets/LJSpeech-1.1/metadata.csv'
-        csv_data = pd.read_csv(csv_dir, sep='|', header=None)
-
-        texts = csv_data[1][:sample_batch]
-        print("texts.shape:", texts.shape)
-
-        phoneme_batch, vocab = phoneme_batch(texts)
-        print("phoneme_batch.shape:", phoneme_batch.shape) # (batch, max_seq_len)
-        print("vocab:\n", vocab)
-
-        # audio-to-mel
-        audio_dirs = ['/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'
-                      .format((4-len(str(i+1)))*'0' + str(i+1)) for i in range(sample_batch)]
-
-        mel_batch = mel_batch(audio_dirs)
-        print("mel_batch.shape:\n", mel_batch.shape) # (batch, max_frame_len, mel_channels)
-        
-        # build model
-        model = make_model(len(vocab), N=hp.num_layers)
-
         # forward testing
+        phoneme_batch, mel_batch, vocab = get_sample_batch(1)
+        model = make_model(len(vocab), N=hp.num_layers)
         batch = Batch(phoneme_batch, mel_batch)
         mels, stop_tokens = model.forward(
             batch.src, batch.trg, batch.src_mask, batch.trg_mask)
         print("decoderoutput mels, stop_tokens\n:",
               mels.shape, stop_tokens.shape)
+
+        """
+        We can begin by trying out a simple copy-task.
+        Given a ordered set of input phoneme and mel, 
+        the goal is to generate back those same mel from text.
+        """
+        batch_size = 1
+        nbatches = 1
+        data = data_prepare_tt2(batch_size, nbatches, random=False)
+        print(data['vocab'])
+        # test_tokens = set()
+        # for token in data['src']:
+        #     for t in token:
+        #         for w in t:
+        #             test_tokens.add(w.data.item())
+        # print(test_tokens)
+
+        for i in range(nbatches):
+            print(data['src'][i].shape, data['tgt'][i].shape)
+        # raise("StopForTest")
+
+        criterion = nn.MSELoss()
+        criterion.to(device)
+        model = model.to(device)
+        model_opt = NoamOpt(hp.model_dim, 1, 400,
+                            torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.999), eps=1e-9))
+
+        # train
+        begin_time = time.time()
+        for epoch in range(30):
+            model.train()
+            run_epoch(data_gen_tt2(data, device=device), model,
+                      SimpleTT2LossCompute(criterion, model_opt), begin_time)
+            model.eval()
+            print(run_epoch(data_gen_tt2(data, device=device), model,
+                            SimpleTT2LossCompute(criterion, None), begin_time))
+
+        # test
+        # model.eval()
+        # src = torch.tensor([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]], dtype=torch.long)
+        # src_mask = torch.ones(1, 1, 10)
+        # print(greedy_decode(model, src, src_mask, max_len=10, start_symbol=1))
 
     else:
         print("\n\nWhat else?\n\n")
