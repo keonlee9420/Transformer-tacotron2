@@ -65,8 +65,9 @@ def run_epoch(data_iter, model, loss_compute, begin_time):
         # print("INNER run_epoch: ", batch.src.shape, batch.trg.shape)
         # print("INNER run_epoch: ", batch.src_mask.shape, batch.trg_mask.shape)
         out, stop_tokens = model.forward(batch.src, batch.trg,
-                            batch.src_mask, batch.trg_mask)
-        loss = loss_compute(out, batch.trg_y.transpose(-2, -1), batch.nframes)
+                                         batch.src_mask, batch.trg_mask)
+        loss = loss_compute(out, batch.trg_y.transpose(-2, -1),
+                            stop_tokens, batch.stop_tokens, batch.nframes)
         total_loss += loss.data
         total_frames += batch.nframes
         frames += batch.nframes
@@ -214,13 +215,15 @@ if __name__ == "__main__":
     elif args['--simple-tt2']:
 
         # forward testing
-        phoneme_batch, mel_batch, vocab = get_sample_batch(1)
+        phoneme_batch, mel_batch, mel_stops, vocab = get_sample_batch(3)
         model = make_model(len(vocab), N=hp.num_layers)
-        batch = Batch(phoneme_batch, mel_batch)
+        batch = Batch(phoneme_batch, {
+                      'trg': mel_batch, 'trg_stops': mel_stops})
+        print("batch.stop_tokens.shape:", batch.stop_tokens.shape)
         mels, stop_tokens = model.forward(
             batch.src, batch.trg, batch.src_mask, batch.trg_mask)
-        print("decoderoutput mels, stop_tokens\n:",
-              mels.shape, stop_tokens.shape)
+        print("decoder_output mels, stop_tokens:\n{}, {}\n\n".format(
+            mels.shape, stop_tokens.shape))
 
         """
         We can begin by trying out a simple copy-task.
@@ -231,32 +234,25 @@ if __name__ == "__main__":
         nbatches = 1
         data = data_prepare_tt2(batch_size, nbatches, random=False)
         print(data['vocab'])
-        # test_tokens = set()
-        # for token in data['src']:
-        #     for t in token:
-        #         for w in t:
-        #             test_tokens.add(w.data.item())
-        # print(test_tokens)
-
-        for i in range(nbatches):
-            print(data['src'][i].shape, data['tgt'][i].shape)
-        # raise("StopForTest")
 
         criterion = nn.MSELoss()
+        # nn.BCELoss(reduction="none") nn.BCEWithLogitsLoss(reduction="none")
+        stop_criterion = nn.BCEWithLogitsLoss(reduction="none")
         criterion.to(device)
+        stop_criterion.to(device)
         model = model.to(device)
         model_opt = NoamOpt(hp.model_dim, 1, 400,
                             torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.999), eps=1e-9))
 
         # train
         begin_time = time.time()
-        for epoch in range(30):
+        for epoch in range(50):
             model.train()
             run_epoch(data_gen_tt2(data, device=device), model,
-                      SimpleTT2LossCompute(criterion, model_opt), begin_time)
+                      SimpleTT2LossCompute(criterion, stop_criterion, model_opt), begin_time)
             model.eval()
             print(run_epoch(data_gen_tt2(data, device=device), model,
-                            SimpleTT2LossCompute(criterion, None), begin_time))
+                            SimpleTT2LossCompute(criterion, stop_criterion, None), begin_time))
 
         # test
         # model.eval()

@@ -65,3 +65,4 @@ attention_dropout = 0.1
 ################################
 # Optimization Hyperparameters #
 ################################
+positive_stop_weight = 6.

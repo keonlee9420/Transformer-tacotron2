@@ -86,6 +86,13 @@ def greedy_decode(model, src, src_mask, max_len, start_symbol):
     return ys
 
 
+# def synthesize(model, text):
+#     mel = torch.zeros([1,1,80], device=model.device)
+
+#     with torch.no_grad():
+        
+
+
 class DecoderPrenet(nn.Module):
     """
     Decoder pre-net for TTS

@@ -19,9 +19,9 @@ EOS = 3
 def build_phone_vocab(texts, vocab=None):
     if vocab is None:
         vocab = {'<unk>': UNK,
-                  '<blank>': BLANK,
-                  '<s>': BOS,
-                  '</s>': EOS, }
+                 '<blank>': BLANK,
+                 '<s>': BOS,
+                 '</s>': EOS, }
     idx = len(vocab)
     for text in texts:
         phoneset = [p for p in phoneme(text).split(' ') if p]
@@ -97,19 +97,24 @@ def _add_ends(mel):
 
 def pad_mel(mels, pad_token=hp.pad_token):
     padded_mels = []
+    stop_tokens = []
     _mels = [_add_ends(mel) for mel in mels]
     max_len = max((mel.shape[0] for mel in _mels))
-    for mel in _mels:
+    for i, mel in enumerate(_mels):
         mel_len = mel.shape[0]
         padded_mels.append(np.pad(
             mel, [[0, max_len - mel_len], [0, 0]], mode='constant', constant_values=pad_token))
-    return np.stack(padded_mels)
+        stop_token = np.zeros((max_len, 1))  # base on padded size
+        stop_token[mel_len-1] = 1.  # end of actual size
+        stop_tokens.append(stop_token)
+    return np.stack(padded_mels), np.stack(stop_tokens)
 
 
 def mel_batch(audio_dirs):
     # (batch, n_frames, mel_channels)
-    return torch.tensor(
-        pad_mel([get_mel(audio_dir) for audio_dir in audio_dirs]))
+    padded_mels, stop_tokens = pad_mel(
+        [get_mel(audio_dir) for audio_dir in audio_dirs])
+    return torch.tensor(padded_mels), torch.tensor(stop_tokens, dtype=torch.float32)
 
 
 def save_mel(mel_batch):
@@ -146,6 +151,17 @@ def get_sample_batch(batch_size, vocab=None, random=False):
     audio_dirs = [hp.audio_dir
                   .format((4-len(str(i+1)))*'0' + str(i+1)) for i in idx]
 
-    tgt = mel_batch(audio_dirs)
+    tgt, tgt_stops = mel_batch(audio_dirs)
     # print("mel_batch.shape:", tgt.shape)
-    return src, tgt, vocab
+    return src, tgt, tgt_stops, vocab
+
+
+def mel_to_wav(mel):
+    import librosa
+    # denormalize
+    M = (np.clip(mel, 0, 1) * hp.max_db) - hp.max_db + hp.ref_db
+
+    S = librosa.feature.inverse.mel_to_stft(M)
+    y = librosa.griffinlim(S)
+
+    librosa.output.write_wav("./simple_tt2.wav", y, hp.sr, norm=False)
