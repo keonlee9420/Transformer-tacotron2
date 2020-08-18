@@ -138,4 +138,6 @@ temp*
 # editor
 /.vscode
 
+# output
 *.png
+/weights

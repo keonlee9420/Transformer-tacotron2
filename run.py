@@ -15,6 +15,7 @@ Options:
     --simple-train                          train with a simple copy-task
     --spacy-train                           train with spacy en-de data
     --simple-tt2                            train with a simple copy-task for Transformer-TTS
+    --epoch=<int>                           simple-tt2 epoch
 """
 
 import sys
@@ -222,7 +223,7 @@ if __name__ == "__main__":
         print("batch.stop_tokens.shape:", batch.stop_tokens.shape)
         mels, stop_tokens = model.forward(
             batch.src, batch.trg, batch.src_mask, batch.trg_mask)
-        print("decoder_output mels, stop_tokens:\n{}, {}\n\n".format(
+        print("decoder_output mels, stop_tokens:\n{}, {}".format(
             mels.shape, stop_tokens.shape))
 
         """
@@ -246,13 +247,61 @@ if __name__ == "__main__":
 
         # train
         begin_time = time.time()
-        for epoch in range(50):
-            model.train()
-            run_epoch(data_gen_tt2(data, device=device), model,
-                      SimpleTT2LossCompute(criterion, stop_criterion, model_opt), begin_time)
-            model.eval()
-            print(run_epoch(data_gen_tt2(data, device=device), model,
-                            SimpleTT2LossCompute(criterion, stop_criterion, None), begin_time))
+
+        import os
+        epoch = 10
+        if args['--epoch']:
+            epoch = int(args['--epoch'])
+        
+        keep = False
+        model_save_path = './weights'
+        model_pt_filename = 'simple-tt2-{}.pt'.format(epoch)
+        model_saved_path = os.path.join(model_save_path, model_pt_filename)
+        if not os.path.isdir(model_save_path):
+            os.mkdir(model_save_path)
+
+        best_lowest_loss = float('inf')
+        run = True
+        print("\n\n\n--------------- train start with EPOCH: {}---------------".format(epoch))
+        if os.path.isfile(model_saved_path):
+            if keep:
+                params = torch.load(model_saved_path)
+                best_lowest_loss = params['best_lowest_loss']
+                model_opt.optimizer.load_state_dict(
+                    params['optimizer_state_dict'])
+                model.load_state_dict(params['state_dict'])
+                model = model.to(device)
+                print("Loaded! best_lowest_loss:\n", best_lowest_loss)
+            else:
+                run = False
+        print("\n")
+        if run:
+            total_epoch = epoch
+            for epoch in range(epoch):
+                model.train()
+                run_epoch(data_gen_tt2(data, device=device), model,
+                          SimpleTT2LossCompute(criterion, stop_criterion, model_opt), begin_time)
+                model.eval()
+                loss = run_epoch(data_gen_tt2(data, device=device), model,
+                                 SimpleTT2LossCompute(criterion, stop_criterion, None), begin_time)
+                print("{}th epoch:".format(epoch+1), loss)
+
+                if  epoch > total_epoch/2 and best_lowest_loss > loss:
+                    best_lowest_loss = loss
+                    torch.save({'state_dict': model.state_dict(), 'optimizer_state_dict': model_opt.optimizer.state_dict(
+                    ), 'best_lowest_loss': best_lowest_loss}, model_saved_path)
+                    print("Saved the best-model!")
+
+        # load the best model and test it
+        params = torch.load(model_saved_path)
+        model.load_state_dict(params['state_dict'])
+        model_opt.optimizer.load_state_dict(params['optimizer_state_dict'])
+        model = model.to(device)
+        model.eval()
+        print("Load the best-model and test:", run_epoch(data_gen_tt2(data, device=device), model,
+                                                         SimpleTT2LossCompute(criterion, stop_criterion, None), begin_time))
+        print("best_lowest_loss:\n", params['best_lowest_loss'])
+        print("\n--------------- train done! ---------------\n\n\n")
 
         # test
         # model.eval()
