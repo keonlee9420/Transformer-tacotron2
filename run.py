@@ -216,15 +216,16 @@ if __name__ == "__main__":
     elif args['--simple-tt2']:
 
         # forward testing
-        phoneme_batch, mel_batch, mel_stops, vocab = get_sample_batch(3)
-        model = make_model(len(vocab), N=hp.num_layers)
-        batch = Batch(phoneme_batch, {
-                      'trg': mel_batch, 'trg_stops': mel_stops})
-        print("batch.stop_tokens.shape:", batch.stop_tokens.shape)
-        mels, stop_tokens = model.forward(
-            batch.src, batch.trg, batch.src_mask, batch.trg_mask)
-        print("decoder_output mels, stop_tokens:\n{}, {}".format(
-            mels.shape, stop_tokens.shape))
+        # phoneme_batch, mel_batch, mel_stops, vocab = get_sample_batch(3)
+        # print(data['vocab'], len(vocab))
+        # model = make_model(len(vocab), N=hp.num_layers)
+        # batch = Batch(phoneme_batch, {
+        #               'trg': mel_batch, 'trg_stops': mel_stops})
+        # print("batch.stop_tokens.shape:", batch.stop_tokens.shape)
+        # mels, stop_tokens = model.forward(
+        #     batch.src, batch.trg, batch.src_mask, batch.trg_mask)
+        # print("decoder_output mels, stop_tokens:\n{}, {}".format(
+        #     mels.shape, stop_tokens.shape))
 
         """
         We can begin by trying out a simple copy-task.
@@ -234,13 +235,13 @@ if __name__ == "__main__":
         batch_size = 1
         nbatches = 1
         data = data_prepare_tt2(batch_size, nbatches, random=False)
-        print(data['vocab'])
 
         criterion = nn.MSELoss()
         # nn.BCELoss(reduction="none") nn.BCEWithLogitsLoss(reduction="none")
         stop_criterion = nn.BCEWithLogitsLoss(reduction="none")
         criterion.to(device)
         stop_criterion.to(device)
+        model = make_model(hp.sample_vocab_size, N=hp.num_layers)
         model = model.to(device)
         model_opt = NoamOpt(hp.model_dim, 1, 400,
                             torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.999), eps=1e-9))
@@ -252,17 +253,23 @@ if __name__ == "__main__":
         epoch = 10
         if args['--epoch']:
             epoch = int(args['--epoch'])
-        
+
         keep = False
-        model_save_path = './weights'
+        model_save_path = hp.weight_dir
+        output_save_path = hp.output_dir
         model_pt_filename = 'simple-tt2-{}.pt'.format(epoch)
         model_saved_path = os.path.join(model_save_path, model_pt_filename)
+
+        # setup directories
         if not os.path.isdir(model_save_path):
             os.mkdir(model_save_path)
+        if not os.path.isdir(output_save_path):
+            os.mkdir(output_save_path)
 
         best_lowest_loss = float('inf')
         run = True
-        print("\n\n\n--------------- train start with EPOCH: {}---------------".format(epoch))
+        print(
+            "\n\n--------------- train start with EPOCH: {}---------------".format(epoch))
         if os.path.isfile(model_saved_path):
             if keep:
                 params = torch.load(model_saved_path)
@@ -274,7 +281,7 @@ if __name__ == "__main__":
                 print("Loaded! best_lowest_loss:\n", best_lowest_loss)
             else:
                 run = False
-        print("\n")
+
         if run:
             total_epoch = epoch
             for epoch in range(epoch):
@@ -286,13 +293,13 @@ if __name__ == "__main__":
                                  SimpleTT2LossCompute(criterion, stop_criterion, None), begin_time)
                 print("{}th epoch:".format(epoch+1), loss)
 
-                if  epoch > total_epoch/2 and best_lowest_loss > loss:
+                if epoch > total_epoch/2 and best_lowest_loss > loss:
                     best_lowest_loss = loss
                     torch.save({'state_dict': model.state_dict(), 'optimizer_state_dict': model_opt.optimizer.state_dict(
                     ), 'best_lowest_loss': best_lowest_loss}, model_saved_path)
                     print("Saved the best-model!")
 
-        # load the best model and test it
+        # load the best model and synthesize with it
         params = torch.load(model_saved_path)
         model.load_state_dict(params['state_dict'])
         model_opt.optimizer.load_state_dict(params['optimizer_state_dict'])
@@ -301,13 +308,26 @@ if __name__ == "__main__":
         print("Load the best-model and test:", run_epoch(data_gen_tt2(data, device=device), model,
                                                          SimpleTT2LossCompute(criterion, stop_criterion, None), begin_time))
         print("best_lowest_loss:\n", params['best_lowest_loss'])
-        print("\n--------------- train done! ---------------\n\n\n")
+        print("train done!\n")
 
-        # test
-        # model.eval()
-        # src = torch.tensor([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]], dtype=torch.long)
-        # src_mask = torch.ones(1, 1, 10)
-        # print(greedy_decode(model, src, src_mask, max_len=10, start_symbol=1))
+        # Synthesize using the very first data
+        print("\n--------------- synthesize! ---------------\n")
+        # device='cpu'
+        from synthesize import synthesize
+        sample_iter = data_gen_tt2(data_prepare_tt2(batch_size, nbatches, random=False), device=device)
+        batch_one = next(sample_iter)
+
+        # synthesize
+        synthesize(model_saved_path, batch_one, device)
+        
+        # # test sampling
+        # with torch.no_grad():
+        #     # model = make_model(hp.sample_vocab_size, N=hp.num_layers)
+        #     # model.to(device)
+        #     out, stop_tokens = model.forward(batch_one.src, batch_one.trg,
+        #                                         batch_one.src_mask, batch_one.trg_mask)
+        #     print(out.shape)
+        #     mel_to_wav(out, save_mel=True)
 
     else:
         print("\n\nWhat else?\n\n")

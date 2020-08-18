@@ -141,3 +141,4 @@ temp*
 # output
 *.png
 /weights
+/outputs

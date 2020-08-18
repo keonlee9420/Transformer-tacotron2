@@ -62,6 +62,14 @@ def phoneme_batch(texts, vocab=None):
     return phoneme_batch, vocab
 
 
+def _normalize(mel):
+    return np.clip((mel - hp.ref_db + hp.max_db) / hp.max_db, 1e-8, 1)
+
+
+def _denormalize(mel):
+    return (np.clip(mel, 0, 1) * hp.max_db) - hp.max_db + hp.ref_db
+
+
 def get_mel(audio_dir):
     y, sr = librosa.load(audio_dir, sr=hp.sr)
 
@@ -83,7 +91,7 @@ def get_mel(audio_dir):
     mel = librosa.power_to_db(mel, ref=np.max)
 
     # normalize
-    mel = np.clip((mel - hp.ref_db + hp.max_db) / hp.max_db, 1e-8, 1)
+    mel = _normalize(mel)
 
     # as input
     mel_input = torch.from_numpy(mel.T)  # (n_frames, mel_chennels)
@@ -117,22 +125,31 @@ def mel_batch(audio_dirs):
     return torch.tensor(padded_mels), torch.tensor(stop_tokens, dtype=torch.float32)
 
 
-def save_mel(mel_batch):
+def _save(mel, save_dir):  # (mel_chennels, n_frames)
+    plt.figure()
+    librosa.display.specshow(
+        np.array(mel), y_axis='mel', x_axis='time')
+    plt.colorbar(format='%+2.0f dB')
+    plt.savefig(save_dir, dpi=300)
+
+
+def save_mel(mel_batch, normalized=False):
     print("Save mels...")
     for i in range(mel_batch.shape[0]):
-        plt.figure()
-        librosa.display.specshow(
-            np.array(mel_batch[i].T), y_axis='mel', x_axis='time')
-        plt.colorbar(format='%+2.0f dB')
-        plt.savefig('fig{}.png'.format(i+1), dpi=300)
-        # print("{}th mel_spec saved".format(i+1), mel_batch[i].T.shape)
+        # (mel_chennels, n_frames)
+        mel = mel_batch[i].T
+        if normalized:
+            # denormalize
+            mel = _denormalize(mel)
+        _save(mel, 'fig{}.png'.format(i+1))
+        print("{}th mel_spec saved".format(i+1), mel.shape)
     print("Save ALL!")
 
 
 def get_sample_batch(batch_size, vocab=None, random=False):
     idx = np.arange(batch_size)
     if random:
-        idx = np.random.randint(0, 50, batch_size)
+        idx = np.random.randint(0, 10, batch_size)
     idx = np.sort(idx)
     print("idx:", idx.shape, idx)
 
@@ -156,12 +173,27 @@ def get_sample_batch(batch_size, vocab=None, random=False):
     return src, tgt, tgt_stops, vocab
 
 
-def mel_to_wav(mel):
-    import librosa
-    # denormalize
-    M = (np.clip(mel, 0, 1) * hp.max_db) - hp.max_db + hp.ref_db
+def mel_to_wav(decoder_output, save_mel=False):
+    print("INNER mel_to_wav\n")
+    mel = decoder_output.squeeze(0).to('cpu')  # (mel_channels, n_frames)
 
-    S = librosa.feature.inverse.mel_to_stft(M)
+    # denormalize
+    M = _denormalize(mel)
+
+    S = librosa.feature.inverse.mel_to_stft(
+        M.numpy(), sr=hp.sr, n_fft=hp.n_fft)
     y = librosa.griffinlim(S)
 
-    librosa.output.write_wav("./simple_tt2.wav", y, hp.sr, norm=False)
+    # de-preemphasis
+    from scipy import signal
+    wav = signal.lfilter([1], [1, -hp.preemphasis], y)
+
+    # save mel
+    if save_mel:
+        import os
+        _save(M, save_dir=os.path.join(hp.output_dir, 'fig_result.png'))
+
+    return wav
+
+
+# def save_wav(wav):

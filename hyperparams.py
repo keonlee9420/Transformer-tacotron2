@@ -8,8 +8,12 @@ pad_token = 0
 ################################
 # Data Parameters             #
 ################################
+sample_vocab_size = 40
 csv_dir = '/home/keon/speech-datasets/LJSpeech-1.1/metadata.csv'
 audio_dir = '/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'
+weight_dir = './weights'
+output_dir = './outputs'
+
 
 ################################
 # Audio Parameters             #

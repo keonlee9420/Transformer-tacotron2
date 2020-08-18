@@ -11,7 +11,12 @@ import hyperparams as hp
 
 
 class Decoder(nn.Module):
-    """Generic N layer decoder with masking."""
+    """
+    Generic N layer decoder with masking.
+    input shape: (batch, n_frames, mel_channels)
+    output shape: (batch, mel_channels, n_frames)
+
+    """
 
     def __init__(self, layer, N):
         super(Decoder, self).__init__()
@@ -90,7 +95,6 @@ def greedy_decode(model, src, src_mask, max_len, start_symbol):
 #     mel = torch.zeros([1,1,80], device=model.device)
 
 #     with torch.no_grad():
-        
 
 
 class DecoderPrenet(nn.Module):
@@ -205,14 +209,15 @@ if __name__ == "__main__":
     audio_dirs = ['/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'
                   .format((4-len(str(i+1)))*'0' + str(i+1)) for i in range(sample_batch)]
 
-    mel_batch = torch.tensor(
-        pad_mel([get_mel(audio_dir) for audio_dir in audio_dirs], pad_token=PAD_TOKEN))
+    padded_mel, stop_tokens = pad_mel(
+        [get_mel(audio_dir) for audio_dir in audio_dirs], pad_token=PAD_TOKEN)
+    mel_batch = torch.tensor(padded_mel)
     mel_maxlen = mel_batch.shape[1]
     # (batch, n_frames, mel_channels)
     print("mel_batch.shape:\n", mel_batch.shape)
 
     # save spectrogram
-    save_mel(mel_batch)
+    save_mel(mel_batch, normalized=True)
 
     from attention import *
     from model import *
@@ -248,12 +253,6 @@ if __name__ == "__main__":
     # print("memory.shape:\n", memory.shape) # encoder output, (batch, n_sequences, model_dim)
 
     # mel_maxlen = mel_batch.shape[1]
-    from schedule import *
-    batch = Batch(torch.ones((sample_batch, 14)), mel_batch)
-    print("Batch.src, trg: ", batch.src.shape, batch.trg.shape)
-    print("Batch.src_mask, trg_mask: ",
-          batch.src_mask.shape, batch.trg_mask.shape)
-    print("Batch.nframes:", batch.nframes)
     # decoder_input = decoder(decoder_input, memory, \
     #     torch.ones((sample_batch, 1, seq_maxlen)), torch.ones((sample_batch, mel_maxlen, mel_maxlen)))
     # print("decoder OUTPUT.shape:\n:", decoder_input.shape)
