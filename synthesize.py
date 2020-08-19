@@ -6,10 +6,10 @@ from utils import *
 from run import make_model, run_epoch
 
 
-def synthesize(model_saved_path, batch_one, device='cpu'):
+def synthesize(model_saved_path, batch_one, vocab_size=hp.sample_vocab_size, device='cpu'):
 
     params = torch.load(model_saved_path)
-    model = make_model(hp.sample_vocab_size, N=hp.num_layers)
+    model = make_model(vocab_size, N=hp.num_layers)
     model.load_state_dict(params['state_dict']) # comment out to compare raw-model to trained-model
     model = model.to(device)
     model.eval()

@@ -232,19 +232,28 @@ if __name__ == "__main__":
         Given a ordered set of input phoneme and mel, 
         the goal is to generate back those same mel from text.
         """
-        batch_size = 1
-        nbatches = 1
-        data = data_prepare_tt2(batch_size, nbatches, random=False)
+        batch_size = 5
+        nbatches = 30
+
+        data = None
+        data_dir = os.path.join(hp.weight_dir, 'prepared-data-{}-{}.pt'.format(batch_size, nbatches))
+        if not os.path.isfile(data_dir):
+            print("Prepare Dataset => batch_size, nbatches:", batch_size, nbatches)
+            data = data_prepare_tt2(batch_size, nbatches, random=False)
+            torch.save({'data': data}, data_dir)
+        else:
+            data = torch.load(data_dir)['data']
+            print("Loaded Prepared Dataset!")
 
         criterion = nn.MSELoss()
         # nn.BCELoss(reduction="none") nn.BCEWithLogitsLoss(reduction="none")
         stop_criterion = nn.BCEWithLogitsLoss(reduction="none")
         criterion.to(device)
         stop_criterion.to(device)
-        model = make_model(hp.sample_vocab_size, N=hp.num_layers)
+        model = make_model(len(data['vocab']), N=hp.num_layers)
         model = model.to(device)
-        model_opt = NoamOpt(hp.model_dim, 1, 400,
-                            torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.999), eps=1e-9))
+        model_opt = NoamOpt(hp.model_dim, 2, 4000,
+                            torch.optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-5))
 
         # train
         begin_time = time.time()
@@ -310,15 +319,15 @@ if __name__ == "__main__":
         print("best_lowest_loss:\n", params['best_lowest_loss'])
         print("train done!\n")
 
-        # Synthesize using the very first data
-        print("\n--------------- synthesize! ---------------\n")
-        # device='cpu' # for debugging
-        from synthesize import synthesize
-        sample_iter = data_gen_tt2(data_prepare_tt2(batch_size, nbatches, random=False), device=device)
-        batch_one = next(sample_iter)
+        # # Synthesize using the very first data
+        # print("\n--------------- synthesize! ---------------\n")
+        # # device='cpu' # for debugging
+        # from synthesize import synthesize
+        # sample_iter = data_gen_tt2(data_prepare_tt2(batch_size, nbatches, random=False), device=device)
+        # batch_one = next(sample_iter)
 
-        # synthesize
-        synthesize(model_saved_path, batch_one, device)
+        # # synthesize
+        # synthesize(model_saved_path, batch_one, len(data['vocab']), device)
         
         # # test sampling
         # with torch.no_grad():

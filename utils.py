@@ -154,7 +154,7 @@ def get_sample_batch(batch_size, vocab=None, random=False):
     if random:
         idx = np.random.randint(0, 10, batch_size)
     idx = np.sort(idx)
-    print("idx:", idx.shape, idx)
+    print("get_sample_batch idx.shape, idx:", idx.shape, idx)
 
     # text-to-phoneme
     csv_data = pd.read_csv(hp.csv_dir, sep='|', header=None)
