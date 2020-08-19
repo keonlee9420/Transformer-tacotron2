@@ -14,19 +14,23 @@ def synthesize(model_saved_path, batch_one, device='cpu'):
     model = model.to(device)
     model.eval()
 
-    # mel_inout = torch.empty((1, 1, 80)).fill_(BOS).to(device)
     actual_len = batch_one.trg.shape[1]
-    given_hints = 385
-    mel_inout = batch_one.trg[:, :given_hints, :]
-
+    given_hints = 0
+    # mel_inout = torch.empty((1, 1, 80)).fill_(BOS).to(device)
+    mel_inout = batch_one.trg[:, :given_hints+1, :]
+    
     with torch.no_grad():
-        for _ in range(actual_len-given_hints):
-            trg_mask = batch_one.make_std_mask(mel_inout, hp.pad_token)
-            out, stop_tokens = model.forward(batch_one.src, mel_inout,
+        for i in range(actual_len-given_hints):
+            if i%1 == 0: # if condition is i%1 == 'teacher forcing'
+                hints = batch_one.trg[:,:given_hints+i+1, :]
+            else:
+                hints = mel_inout[:,:given_hints+i+1, :]
+            trg_mask = batch_one.make_std_mask(hints, hp.pad_token)
+            out, stop_tokens = model.forward(batch_one.src, hints,
                                              batch_one.src_mask, trg_mask)
             mel_inout = torch.cat(
                 (mel_inout, out.transpose(-2, -1)[:, -1:, :]), dim=1)
-            print(mel_inout.shape, trg_mask.shape, out.shape)
+            print(hints.shape, mel_inout.shape, trg_mask.shape, out.shape)
         score = nn.functional.softmax(stop_tokens, dim=1)
         # print(torch.mean(score), score[:, -1, :])
 
@@ -35,4 +39,5 @@ def synthesize(model_saved_path, batch_one, device='cpu'):
               score[:, idx.data.item()], torch.max(score, dim=1)[0])
         print("output shape, trg actual shape:\n",
               mel_inout.shape, batch_one.trg.shape)
-        wav = mel_to_wav(out, save_mel=True)
+        wav = mel_to_wav(out[:,:,:-1], filename="syn_result")
+        save_wav(wav, 'syn_wav_sample')

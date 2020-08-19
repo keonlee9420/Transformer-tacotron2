@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
 import torch
 import numpy as np
 import pandas as pd
@@ -125,12 +126,14 @@ def mel_batch(audio_dirs):
     return torch.tensor(padded_mels), torch.tensor(stop_tokens, dtype=torch.float32)
 
 
-def _save(mel, save_dir):  # (mel_chennels, n_frames)
+def _save_mel_fig(mel, save_dir):  # (mel_chennels, n_frames)
     plt.figure()
     librosa.display.specshow(
         np.array(mel), y_axis='mel', x_axis='time')
     plt.colorbar(format='%+2.0f dB')
     plt.savefig(save_dir, dpi=300)
+    plt.close()
+    print("mel_fig saved!")
 
 
 def save_mel(mel_batch, normalized=False):
@@ -141,7 +144,7 @@ def save_mel(mel_batch, normalized=False):
         if normalized:
             # denormalize
             mel = _denormalize(mel)
-        _save(mel, 'fig{}.png'.format(i+1))
+        _save_mel_fig(mel, 'fig{}.png'.format(i+1))
         print("{}th mel_spec saved".format(i+1), mel.shape)
     print("Save ALL!")
 
@@ -173,27 +176,50 @@ def get_sample_batch(batch_size, vocab=None, random=False):
     return src, tgt, tgt_stops, vocab
 
 
-def mel_to_wav(decoder_output, save_mel=False):
-    print("INNER mel_to_wav\n")
+def save_wav(wav, filename):
+    from scipy.io.wavfile import write
+    path = os.path.join(hp.output_dir, '{}.wav'.format(filename))
+    # write(path, hp.sr, wav)
+    wav = wav * 32767 / max(0.01, np.max(np.abs(wav)))
+    write(path, hp.sr, wav.astype(np.int16))
+    print("wav saved!")
+
+
+def _save_amp_time_fig(y, save_dir):
+    plt.plot(y)
+    plt.title('Signal')
+    plt.xlabel('Time (samples)')
+    plt.ylabel('Amplitude')
+    plt.savefig(save_dir, dpi=300)
+    plt.close()
+    print("amp_time_fig saved!")
+
+
+def mel_to_wav(decoder_output, filename=None):
     mel = decoder_output.squeeze(0).to('cpu')  # (mel_channels, n_frames)
 
     # denormalize
     M = _denormalize(mel)
 
+    # to power
+    power = librosa.db_to_power(M, ref=1.)
+
     S = librosa.feature.inverse.mel_to_stft(
-        M.numpy(), sr=hp.sr, n_fft=hp.n_fft)
+        power.numpy(), sr=hp.sr, n_fft=hp.n_fft)
     y = librosa.griffinlim(S)
 
     # de-preemphasis
     from scipy import signal
     wav = signal.lfilter([1], [1, -hp.preemphasis], y)
 
-    # save mel
-    if save_mel:
-        import os
-        _save(M, save_dir=os.path.join(hp.output_dir, 'fig_result.png'))
+    # Trimmings
+    wav, _ = librosa.effects.trim(wav)
+
+    # save results
+    if filename:
+        _save_amp_time_fig(wav, save_dir=os.path.join(
+            hp.output_dir, '{}.png'.format(str(filename) + "_amp_time")))
+        _save_mel_fig(M, save_dir=os.path.join(
+            hp.output_dir, '{}.png'.format(str(filename) + "_mel")))
 
     return wav
-
-
-# def save_wav(wav):
