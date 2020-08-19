@@ -83,7 +83,7 @@ class Batch:
             self.nframes = (self.trg_y.sum(dim=-1) != pad).data.sum()
             self.trg_stops = trg_set['trg_stops']
             # print("trg_stops.shape:", self.trg_stops.shape)
-            self.stop_tokens = self.trg_stops[:,1:,:]
+            self.stop_tokens = self.trg_stops[:, 1:, :]
             # print("stop_tokens.shape:", self.stop_tokens.shape)
 
     @staticmethod
@@ -112,16 +112,37 @@ def data_gen(V, batch, nbatches, device):
         yield Batch(src, tgt, 0)
 
 
-def data_prepare_tt2(batch_size, nbatches, random=False):
+def data_prepare_tt2(batch_size, nbatches, random=False, sequential=False):
     """Prepare data for a src-tgt copy task of tt2 given src and tgt batch."""
     from utils import get_sample_batch
     src, tgt, tgt_stops, vocab = [], [], [], None
-    for _ in range(nbatches):
-        phoneme_batch, mel_batch, mel_stops, vocab = get_sample_batch(
-            batch_size, vocab, random)
-        src.append(phoneme_batch)
-        tgt.append(mel_batch)
-        tgt_stops.append(mel_stops)
+
+    def _append(b):
+        src.append(b['src'])
+        tgt.append(b['tgt'])
+        tgt_stops.append(b['tgt_stops'])
+
+    # different(sequential) data in each batch
+    if sequential:
+        for i in range(nbatches):
+            batch = get_sample_batch(batch_size, start=i * batch_size,
+                                     vocab=vocab, random=random)
+            _append(batch)
+            vocab = batch['vocab']
+
+    # same data in each batch
+    else:
+        batch = get_sample_batch(batch_size, vocab=vocab, random=random)
+        _append(batch)
+        vocab = batch['vocab']
+
+        for _ in range(nbatches-1):
+            if random:
+                batch = get_sample_batch(
+                    batch_size, vocab=vocab, random=random)
+                vocab = batch['vocab']
+            _append(batch)
+
     return {'src': src, 'tgt': tgt, 'tgt_stops': tgt_stops, 'vocab': vocab}
 
 
@@ -163,7 +184,7 @@ class SimpleTT2LossCompute:
         # print("stop_x shape and dtype", stop_x.shape, stop_x.dtype, stop_x[:,-3:,:])
         # print("stop_y shape and dtype", stop_y.shape, stop_y.dtype, stop_y[:,-3:,:])
         stop_loss = self.stop(stop_x, stop_y)
-        stop_loss[:,-1,:] *= hp.positive_stop_weight
+        stop_loss[:, -1, :] *= hp.positive_stop_weight
         stop_loss = torch.mean(stop_loss)
 
         loss = self.criterion(x, y) + stop_loss
@@ -171,6 +192,7 @@ class SimpleTT2LossCompute:
         if self.opt is not None:
             self.opt.step()
             self.opt.optimizer.zero_grad()
+            # self.opt.zero_grad()
         return loss.data.item() * norm
 
 

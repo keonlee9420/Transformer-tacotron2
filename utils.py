@@ -149,10 +149,10 @@ def save_mel(mel_batch, normalized=False):
     print("Save ALL!")
 
 
-def get_sample_batch(batch_size, vocab=None, random=False):
-    idx = np.arange(batch_size)
+def get_sample_batch(batch_size, start=0, vocab=None, random=False):
+    idx = np.arange(start, start + batch_size)
     if random:
-        idx = np.random.randint(0, 10, batch_size)
+        idx = np.random.randint(0, 100, batch_size)
     idx = np.sort(idx)
     print("get_sample_batch idx.shape, idx:", idx.shape, idx)
 
@@ -173,7 +173,7 @@ def get_sample_batch(batch_size, vocab=None, random=False):
 
     tgt, tgt_stops = mel_batch(audio_dirs)
     # print("mel_batch.shape:", tgt.shape)
-    return src, tgt, tgt_stops, vocab
+    return {'src': src, 'tgt': tgt, 'tgt_stops': tgt_stops, 'vocab': vocab}
 
 
 def save_wav(wav, filename):
@@ -207,22 +207,29 @@ def mel_to_wav(decoder_output, filename=None):
     # S = librosa.feature.inverse.mel_to_stft(
     #     power.numpy(), sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.hop_length, win_length=hp.win_length)
     # y = librosa.griffinlim(S)
-
+    import time
+    bt = time.time()
+    print("stpe_1 {:.2f}".format(time.time() - bt))
     y = librosa.feature.inverse.mel_to_audio(
         power.numpy(), sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.hop_length, win_length=hp.win_length)
+    print("stpe_2 {:.2f}".format(time.time() - bt))
 
     # de-preemphasis
     from scipy import signal
     wav = signal.lfilter([1], [1, -hp.preemphasis], y)
+    print("stpe_3 {:.2f}".format(time.time() - bt))
 
     # Trimmings
     wav, _ = librosa.effects.trim(wav)
+    print("stpe_4 {:.2f}".format(time.time() - bt))
 
     # save results
     if filename:
         _save_amp_time_fig(wav, save_dir=os.path.join(
             hp.output_dir, '{}.png'.format(str(filename) + "_amp_time")))
+        print("stpe_5 {:.2f}".format(time.time() - bt))
         _save_mel_fig(M, save_dir=os.path.join(
             hp.output_dir, '{}.png'.format(str(filename) + "_mel")))
+        print("stpe_6 {:.2f}".format(time.time() - bt))
 
     return wav

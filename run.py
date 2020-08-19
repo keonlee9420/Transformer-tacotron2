@@ -214,36 +214,27 @@ if __name__ == "__main__":
         print(trans)
 
     elif args['--simple-tt2']:
-
-        # forward testing
-        # phoneme_batch, mel_batch, mel_stops, vocab = get_sample_batch(3)
-        # print(data['vocab'], len(vocab))
-        # model = make_model(len(vocab), N=hp.num_layers)
-        # batch = Batch(phoneme_batch, {
-        #               'trg': mel_batch, 'trg_stops': mel_stops})
-        # print("batch.stop_tokens.shape:", batch.stop_tokens.shape)
-        # mels, stop_tokens = model.forward(
-        #     batch.src, batch.trg, batch.src_mask, batch.trg_mask)
-        # print("decoder_output mels, stop_tokens:\n{}, {}".format(
-        #     mels.shape, stop_tokens.shape))
-
         """
         We can begin by trying out a simple copy-task.
         Given a ordered set of input phoneme and mel, 
         the goal is to generate back those same mel from text.
         """
-        batch_size = 5
-        nbatches = 30
+        batch_size = 2
+        nbatches = 5
+        print("batch_size, nbatches:", batch_size, nbatches)
 
         data = None
-        data_dir = os.path.join(hp.weight_dir, 'prepared-data-{}-{}.pt'.format(batch_size, nbatches))
+        sequential = True
+        data_dir = os.path.join(
+            hp.weight_dir, 'prepared-data-{}-{}-{}.pt'.format(batch_size, nbatches, sequential))
         if not os.path.isfile(data_dir):
-            print("Prepare Dataset => batch_size, nbatches:", batch_size, nbatches)
-            data = data_prepare_tt2(batch_size, nbatches, random=False)
+            print("Prepare Dataset")
+            data = data_prepare_tt2(batch_size, nbatches, sequential=sequential)
             torch.save({'data': data}, data_dir)
         else:
             data = torch.load(data_dir)['data']
             print("Loaded Prepared Dataset!")
+        # exit("END OF TEST")
 
         criterion = nn.MSELoss()
         # nn.BCELoss(reduction="none") nn.BCEWithLogitsLoss(reduction="none")
@@ -252,8 +243,8 @@ if __name__ == "__main__":
         stop_criterion.to(device)
         model = make_model(len(data['vocab']), N=hp.num_layers)
         model = model.to(device)
-        model_opt = NoamOpt(hp.model_dim, 2, 4000,
-                            torch.optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-5))
+        model_opt = NoamOpt(hp.model_dim, 1, 400,
+                            torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.999), eps=1e-9, weight_decay=0.001))
 
         # train
         begin_time = time.time()
@@ -266,7 +257,7 @@ if __name__ == "__main__":
         keep = False
         model_save_path = hp.weight_dir
         output_save_path = hp.output_dir
-        model_pt_filename = 'simple-tt2-{}.pt'.format(epoch)
+        model_pt_filename = 'simple-tt2-{}-{}-{}.pt'.format(epoch, batch_size, nbatches)
         model_saved_path = os.path.join(model_save_path, model_pt_filename)
 
         # setup directories
@@ -302,7 +293,7 @@ if __name__ == "__main__":
                                  SimpleTT2LossCompute(criterion, stop_criterion, None), begin_time)
                 print("{}th epoch:".format(epoch+1), loss)
 
-                if epoch > total_epoch/2 and best_lowest_loss > loss:
+                if epoch > total_epoch/10 and best_lowest_loss > loss:
                     best_lowest_loss = loss
                     torch.save({'state_dict': model.state_dict(), 'optimizer_state_dict': model_opt.optimizer.state_dict(
                     ), 'best_lowest_loss': best_lowest_loss}, model_saved_path)
@@ -319,33 +310,33 @@ if __name__ == "__main__":
         print("best_lowest_loss:\n", params['best_lowest_loss'])
         print("train done!\n")
 
-        # # Synthesize using the very first data
-        # print("\n--------------- synthesize! ---------------\n")
-        # # device='cpu' # for debugging
-        # from synthesize import synthesize
-        # sample_iter = data_gen_tt2(data_prepare_tt2(batch_size, nbatches, random=False), device=device)
-        # batch_one = next(sample_iter)
+        # Synthesize using the very first data
+        print("\n--------------- synthesize! ---------------\n")
+        # device='cpu' # for debugging
+        from synthesize import synthesize
+        sample_iter = data_gen_tt2(data_prepare_tt2(batch_size, nbatches, random=False), device=device)
+        batch_one = next(sample_iter)
 
-        # # synthesize
+        # synthesize
         # synthesize(model_saved_path, batch_one, len(data['vocab']), device)
-        
-        # # test sampling
-        # with torch.no_grad():
-        #     # model = make_model(hp.sample_vocab_size, N=hp.num_layers)
-        #     # model.to(device)
-        #     out, stop_tokens = model.forward(batch_one.src, batch_one.trg,
-        #                                         batch_one.src_mask, batch_one.trg_mask)
-        #     # print(out.shape)
-        #     wav = mel_to_wav(out[:,:,:-1], filename="output").astype(np.float32)
-        #     save_wav(wav, 'wav_output')
 
-        #     print("\n--------------- reconstruct mel to wave under same converter ---------------")
-        #     wav_original = mel_to_wav(batch_one.trg.transpose(-2, -1)[:,:,1:], filename="reconstruct").astype(np.float32)
-        #     save_wav(wav_original, 'wav_reconstruct')
+        # test sampling
+        with torch.no_grad():
+            # model = make_model(hp.sample_vocab_size, N=hp.num_layers)
+            # model.to(device)
+            out, stop_tokens = model.forward(batch_one.src, batch_one.trg,
+                                                batch_one.src_mask, batch_one.trg_mask)
+            # print(out.shape)
+            wav = mel_to_wav(out[0,:,:-1].unsqueeze(0), filename="output").astype(np.float32)
+            save_wav(wav, 'wav_output')
 
-        #     print("\n--------------- source conversion only using librosa ---------------")
-        #     wav_source = mel_to_wav(get_mel('./outputs/samples/LJ001-0001.wav').T.unsqueeze(0), filename="source")
-        #     save_wav(wav_source, 'wav_source')
+            print("\n--------------- reconstruct mel to wave under same converter ---------------")
+            wav_original = mel_to_wav(batch_one.trg.transpose(-2, -1)[0,:,1:].unsqueeze(0), filename="reconstruct").astype(np.float32)
+            save_wav(wav_original, 'wav_reconstruct')
+
+            print("\n--------------- source conversion only using librosa ---------------")
+            wav_source = mel_to_wav(get_mel('./outputs/samples/LJ001-0001.wav').T.unsqueeze(0), filename="source")
+            save_wav(wav_source, 'wav_source')
 
     else:
         print("\n\nWhat else?\n\n")
