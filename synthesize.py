@@ -39,5 +39,5 @@ def synthesize(model_saved_path, batch_one, device='cpu'):
               score[:, idx.data.item()], torch.max(score, dim=1)[0])
         print("output shape, trg actual shape:\n",
               mel_inout.shape, batch_one.trg.shape)
-        wav = mel_to_wav(out[:,:,:-1], filename="syn_result")
-        save_wav(wav, 'syn_wav_sample')
+        wav = mel_to_wav(out[:,:,:-1], filename="syn")
+        save_wav(wav, 'wav_syn')

@@ -320,23 +320,23 @@ if __name__ == "__main__":
         # synthesize
         synthesize(model_saved_path, batch_one, device)
         
-        # test sampling
-        with torch.no_grad():
-            # model = make_model(hp.sample_vocab_size, N=hp.num_layers)
-            # model.to(device)
-            out, stop_tokens = model.forward(batch_one.src, batch_one.trg,
-                                                batch_one.src_mask, batch_one.trg_mask)
-            # print(out.shape)
-            wav = mel_to_wav(out[:,:,:-1], filename="output").astype(np.float32)
-            save_wav(wav, 'wav_output')
+        # # test sampling
+        # with torch.no_grad():
+        #     # model = make_model(hp.sample_vocab_size, N=hp.num_layers)
+        #     # model.to(device)
+        #     out, stop_tokens = model.forward(batch_one.src, batch_one.trg,
+        #                                         batch_one.src_mask, batch_one.trg_mask)
+        #     # print(out.shape)
+        #     wav = mel_to_wav(out[:,:,:-1], filename="output").astype(np.float32)
+        #     save_wav(wav, 'wav_output')
 
-            print("\n--------------- reconstruct mel to wave under same converter ---------------")
-            wav_original = mel_to_wav(batch_one.trg.transpose(-2, -1)[:,:,1:], filename="reconstruct").astype(np.float32)
-            save_wav(wav_original, 'wav_reconstruct')
+        #     print("\n--------------- reconstruct mel to wave under same converter ---------------")
+        #     wav_original = mel_to_wav(batch_one.trg.transpose(-2, -1)[:,:,1:], filename="reconstruct").astype(np.float32)
+        #     save_wav(wav_original, 'wav_reconstruct')
 
-            print("\n--------------- source criteria ---------------")
-            wav_source = mel_to_wav(get_mel('./outputs/samples/LJ001-0001.wav').T.unsqueeze(0), filename="source")
-            save_wav(wav_source, 'wav_source')
+        #     print("\n--------------- source conversion only using librosa ---------------")
+        #     wav_source = mel_to_wav(get_mel('./outputs/samples/LJ001-0001.wav').T.unsqueeze(0), filename="source")
+        #     save_wav(wav_source, 'wav_source')
 
     else:
         print("\n\nWhat else?\n\n")

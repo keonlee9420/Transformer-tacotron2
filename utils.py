@@ -204,9 +204,12 @@ def mel_to_wav(decoder_output, filename=None):
     # to power
     power = librosa.db_to_power(M, ref=1.)
 
-    S = librosa.feature.inverse.mel_to_stft(
-        power.numpy(), sr=hp.sr, n_fft=hp.n_fft)
-    y = librosa.griffinlim(S)
+    # S = librosa.feature.inverse.mel_to_stft(
+    #     power.numpy(), sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.hop_length, win_length=hp.win_length)
+    # y = librosa.griffinlim(S)
+
+    y = librosa.feature.inverse.mel_to_audio(
+        power.numpy(), sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.hop_length, win_length=hp.win_length)
 
     # de-preemphasis
     from scipy import signal
