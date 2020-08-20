@@ -39,6 +39,22 @@ class NoamOpt:
              min(step ** (-0.5), step * self.warmup ** (-1.5)))
 
 
+class CustomAdam:
+    def __init__(self, optimizer, scheduler):
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+        self._step = 0
+        self._rate = 0
+
+    def step(self, loss=None):
+        self._step += 1
+        # for p in self.optimizer.param_groups:
+        #     self._rate = p['lr']
+        #     print("\n\n{}\n".format(self._rate))
+        self.optimizer.step()
+        self.scheduler.step(loss)
+
+
 def get_std_opt(model):
     return NoamOpt(model.src_embed[0].d_model, 2, 4000,
                    torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
@@ -190,7 +206,7 @@ class SimpleTT2LossCompute:
         loss = self.criterion(x, y) + stop_loss
         loss.backward()
         if self.opt is not None:
-            self.opt.step()
+            self.opt.step(loss)
             self.opt.optimizer.zero_grad()
             # self.opt.zero_grad()
         return loss.data.item() * norm

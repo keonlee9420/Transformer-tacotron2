@@ -219,6 +219,12 @@ if __name__ == "__main__":
         Given a ordered set of input phoneme and mel, 
         the goal is to generate back those same mel from text.
         """
+        import os
+        from synthesize import synthesize
+
+        epoch = 10
+        if args['--epoch']:
+            epoch = int(args['--epoch'])
         batch_size = 2
         nbatches = 5
         print("batch_size, nbatches:", batch_size, nbatches)
@@ -226,10 +232,11 @@ if __name__ == "__main__":
         data = None
         sequential = True
         data_dir = os.path.join(
-            hp.weight_dir, 'prepared-data-{}-{}-{}.pt'.format(batch_size, nbatches, sequential))
+            hp.weight_dir, 'prepared-data-{}-{}_{}.pt'.format(batch_size, nbatches, 'seq' if sequential else 'same'))
         if not os.path.isfile(data_dir):
             print("Prepare Dataset")
-            data = data_prepare_tt2(batch_size, nbatches, sequential=sequential)
+            data = data_prepare_tt2(
+                batch_size, nbatches, sequential=sequential)
             torch.save({'data': data}, data_dir)
         else:
             data = torch.load(data_dir)['data']
@@ -243,22 +250,39 @@ if __name__ == "__main__":
         stop_criterion.to(device)
         model = make_model(len(data['vocab']), N=hp.num_layers)
         model = model.to(device)
-        model_opt = NoamOpt(hp.model_dim, 1, 400,
-                            torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.999), eps=1e-9, weight_decay=0.001))
+        # model_opt = NoamOpt(hp.model_dim, 1, 400,
+        #                     torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.999), eps=1e-9, weight_decay=0.001))
+
+        lr = 1e-3  # hp.lr
+        my_optim = torch.optim.Adam(model.parameters(),
+                                    lr, betas=(0.9, 0.999), eps=1e-8, weight_decay=1e-5)
+        my_lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(my_optim,
+                                                              max_lr=lr,
+                                                              steps_per_epoch=int(
+                                                                  nbatches),
+                                                              epochs=epoch,
+                                                              anneal_strategy='cos',
+                                                              pct_start=0.35,
+                                                              base_momentum=0.85,
+                                                              max_momentum=0.99,
+                                                              div_factor=10,
+                                                              final_div_factor=1e4)
+        # my_lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(my_optim,
+        #                                                              factor=-0.1,
+        #                                                              patience=10,
+        #                                                              cooldown=50,
+        #                                                              threshold=1e-3,
+        #                                                              threshold_mode='rel')
+        model_opt = CustomAdam(my_optim, my_lr_scheduler)
 
         # train
         begin_time = time.time()
-
-        import os
-        epoch = 10
-        if args['--epoch']:
-            epoch = int(args['--epoch'])
-
-        keep = False
         model_save_path = hp.weight_dir
         output_save_path = hp.output_dir
-        model_pt_filename = 'simple-tt2-{}-{}-{}.pt'.format(epoch, batch_size, nbatches)
+        model_pt_filename = 'simple-tt2-{}-{}-{}_{}.pt'.format(
+            epoch, batch_size, nbatches, str(lr))
         model_saved_path = os.path.join(model_save_path, model_pt_filename)
+        print("model_saved_path:", model_saved_path)
 
         # setup directories
         if not os.path.isdir(model_save_path):
@@ -271,18 +295,14 @@ if __name__ == "__main__":
         print(
             "\n\n--------------- train start with EPOCH: {}---------------".format(epoch))
         if os.path.isfile(model_saved_path):
-            if keep:
-                params = torch.load(model_saved_path)
-                best_lowest_loss = params['best_lowest_loss']
-                model_opt.optimizer.load_state_dict(
-                    params['optimizer_state_dict'])
-                model.load_state_dict(params['state_dict'])
-                model = model.to(device)
-                print("Loaded! best_lowest_loss:\n", best_lowest_loss)
-            else:
-                run = False
-
-        if run:
+            params = torch.load(model_saved_path)
+            best_lowest_loss = params['best_lowest_loss']
+            model_opt.optimizer.load_state_dict(
+                params['optimizer_state_dict'])
+            model.load_state_dict(params['state_dict'])
+            model = model.to(device)
+            print("Loaded! best_lowest_loss:\n", best_lowest_loss)
+        else:
             total_epoch = epoch
             for epoch in range(epoch):
                 model.train()
@@ -293,7 +313,7 @@ if __name__ == "__main__":
                                  SimpleTT2LossCompute(criterion, stop_criterion, None), begin_time)
                 print("{}th epoch:".format(epoch+1), loss)
 
-                if epoch > total_epoch/10 and best_lowest_loss > loss:
+                if epoch > total_epoch/2 and best_lowest_loss > loss:
                     best_lowest_loss = loss
                     torch.save({'state_dict': model.state_dict(), 'optimizer_state_dict': model_opt.optimizer.state_dict(
                     ), 'best_lowest_loss': best_lowest_loss}, model_saved_path)
@@ -313,30 +333,36 @@ if __name__ == "__main__":
         # Synthesize using the very first data
         print("\n--------------- synthesize! ---------------\n")
         # device='cpu' # for debugging
-        from synthesize import synthesize
-        sample_iter = data_gen_tt2(data_prepare_tt2(batch_size, nbatches, random=False), device=device)
-        batch_one = next(sample_iter)
 
         # synthesize
-        # synthesize(model_saved_path, batch_one, len(data['vocab']), device)
+        # synthesize(model_saved_path, next(data_gen_tt2(data, device=device)), len(data['vocab']), device)
 
         # test sampling
         with torch.no_grad():
             # model = make_model(hp.sample_vocab_size, N=hp.num_layers)
             # model.to(device)
-            out, stop_tokens = model.forward(batch_one.src, batch_one.trg,
-                                                batch_one.src_mask, batch_one.trg_mask)
-            # print(out.shape)
-            wav = mel_to_wav(out[0,:,:-1].unsqueeze(0), filename="output").astype(np.float32)
-            save_wav(wav, 'wav_output')
+            for i, batch in enumerate(data_gen_tt2(data, device=device)):
+                out, stop_tokens = model.forward(batch.src, batch.trg,
+                                                 batch.src_mask, batch.trg_mask)
+                # print(out.shape)
+                # directly save every teacher-forced output
+                for b in range(out.shape[0]):
+                    print(out[b, :, :-1].unsqueeze(0).shape)
+                    wav = mel_to_wav(
+                        out[b, :, :-1].unsqueeze(0), filename="output_{}_{}".format(i+1, b+1))
+                    save_wav(wav, 'wav_output_{}_{}'.format(i+1, b+1))
 
-            print("\n--------------- reconstruct mel to wave under same converter ---------------")
-            wav_original = mel_to_wav(batch_one.trg.transpose(-2, -1)[0,:,1:].unsqueeze(0), filename="reconstruct").astype(np.float32)
-            save_wav(wav_original, 'wav_reconstruct')
+            # print(
+            #     "\n--------------- reconstruct mel to wave under same converter ---------------")
+            # wav_original = mel_to_wav(batch_one.trg.transpose(
+            #     -2, -1)[0, :, 1:].unsqueeze(0), filename="reconstruct")
+            # save_wav(wav_original, 'wav_reconstruct')
 
-            print("\n--------------- source conversion only using librosa ---------------")
-            wav_source = mel_to_wav(get_mel('./outputs/samples/LJ001-0001.wav').T.unsqueeze(0), filename="source")
-            save_wav(wav_source, 'wav_source')
+            # print(
+            #     "\n--------------- source conversion only using librosa ---------------")
+            # wav_source = mel_to_wav(
+            #     get_mel('./outputs/samples/LJ001-0001.wav').T.unsqueeze(0), filename="source")
+            # save_wav(wav_source, 'wav_source')
 
     else:
         print("\n\nWhat else?\n\n")

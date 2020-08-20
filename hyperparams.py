@@ -4,6 +4,7 @@
 # Simple train
 batch_size = 30
 pad_token = 0
+lr = 5e-6
 
 ################################
 # Data Parameters             #
