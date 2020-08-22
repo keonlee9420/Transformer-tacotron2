@@ -21,12 +21,13 @@ class NoamOpt:
         self.model_size = model_size
         self._rate = 0
 
-    def step(self):
+    def step(self, loss=None):
         """Update parameters and rate"""
         self._step += 1
         rate = self.rate()
         for p in self.optimizer.param_groups:
             p['lr'] = rate
+            # print("{}".format(rate))
         self._rate = rate
         self.optimizer.step()
 
@@ -40,7 +41,7 @@ class NoamOpt:
 
 
 class CustomAdam:
-    def __init__(self, optimizer, scheduler):
+    def __init__(self, optimizer, scheduler=None):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self._step = 0
@@ -48,11 +49,12 @@ class CustomAdam:
 
     def step(self, loss=None):
         self._step += 1
-        # for p in self.optimizer.param_groups:
-        #     self._rate = p['lr']
-        #     print("\n\n{}\n".format(self._rate))
+        for p in self.optimizer.param_groups:
+            self._rate = p['lr']
+            # print("\n\n{}\n".format(self._rate))
         self.optimizer.step()
-        self.scheduler.step(loss)
+        if self.scheduler:
+            self.scheduler.step(loss)
 
 
 def get_std_opt(model):

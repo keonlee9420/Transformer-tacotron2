@@ -250,32 +250,36 @@ if __name__ == "__main__":
         stop_criterion.to(device)
         model = make_model(len(data['vocab']), N=hp.num_layers)
         model = model.to(device)
-        # model_opt = NoamOpt(hp.model_dim, 1, 400,
-        #                     torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.999), eps=1e-9, weight_decay=0.001))
 
-        lr = 1e-3  # hp.lr
-        my_optim = torch.optim.Adam(model.parameters(),
-                                    lr, betas=(0.9, 0.999), eps=1e-8, weight_decay=1e-5)
-        my_lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(my_optim,
-                                                              max_lr=lr,
-                                                              steps_per_epoch=int(
-                                                                  nbatches),
-                                                              epochs=epoch,
-                                                              anneal_strategy='cos',
-                                                              pct_start=0.35,
-                                                              base_momentum=0.85,
-                                                              max_momentum=0.99,
-                                                              div_factor=10,
-                                                              final_div_factor=1e4)
+        keep = False
+        lr = 'NoanOpt'
+        model_opt = NoamOpt(hp.model_dim, 10, 2000,
+                            torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.999), eps=1e-9))
+
+        # lr = 3e-3#2e-5 'NoamOpt'  # hp.lr
+        # , betas=(0.9, 0.999), eps=1e-8, weight_decay=1e-5
+        # my_optim = torch.optim.Adam(model.parameters(), lr)
+        # my_lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(my_optim,
+        #                                                       max_lr=lr,
+        #                                                       steps_per_epoch=int(
+        #                                                           nbatches),
+        #                                                       epochs=epoch,
+        #                                                       anneal_strategy='cos',
+        #                                                       pct_start=0.5,
+        #                                                       base_momentum=0.75,
+        #                                                       max_momentum=0.99,
+        #                                                       div_factor=1,
+        #                                                       final_div_factor=1e4)
         # my_lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(my_optim,
-        #                                                              factor=-0.1,
+        #                                                              factor=0.5,
         #                                                              patience=10,
-        #                                                              cooldown=50,
-        #                                                              threshold=1e-3,
-        #                                                              threshold_mode='rel')
-        model_opt = CustomAdam(my_optim, my_lr_scheduler)
+        #                                                              cooldown=10,
+        #                                                              threshold=1e-6,
+        #                                                              threshold_mode='abs')
+        # model_opt = CustomAdam(my_optim)
 
         # train
+        run = True
         begin_time = time.time()
         model_save_path = hp.weight_dir
         output_save_path = hp.output_dir
@@ -290,10 +294,6 @@ if __name__ == "__main__":
         if not os.path.isdir(output_save_path):
             os.mkdir(output_save_path)
 
-        best_lowest_loss = float('inf')
-        run = True
-        print(
-            "\n\n--------------- train start with EPOCH: {}---------------".format(epoch))
         if os.path.isfile(model_saved_path):
             params = torch.load(model_saved_path)
             best_lowest_loss = params['best_lowest_loss']
@@ -302,7 +302,13 @@ if __name__ == "__main__":
             model.load_state_dict(params['state_dict'])
             model = model.to(device)
             print("Loaded! best_lowest_loss:\n", best_lowest_loss)
-        else:
+            if not keep:
+                run = False
+
+        best_lowest_loss = float('inf')
+        print(
+            "\n\n--------------- train start with EPOCH: {}---------------".format(epoch))
+        if run:
             total_epoch = epoch
             for epoch in range(epoch):
                 model.train()
@@ -313,7 +319,7 @@ if __name__ == "__main__":
                                  SimpleTT2LossCompute(criterion, stop_criterion, None), begin_time)
                 print("{}th epoch:".format(epoch+1), loss)
 
-                if epoch > total_epoch/2 and best_lowest_loss > loss:
+                if epoch > total_epoch*0.5 and best_lowest_loss > loss:
                     best_lowest_loss = loss
                     torch.save({'state_dict': model.state_dict(), 'optimizer_state_dict': model_opt.optimizer.state_dict(
                     ), 'best_lowest_loss': best_lowest_loss}, model_saved_path)
@@ -335,22 +341,22 @@ if __name__ == "__main__":
         # device='cpu' # for debugging
 
         # synthesize
-        # synthesize(model_saved_path, next(data_gen_tt2(data, device=device)), len(data['vocab']), device)
+        synthesize(model_saved_path, next(data_gen_tt2(data, device=device)), len(data['vocab']), device)
 
-        # test sampling
-        with torch.no_grad():
-            # model = make_model(hp.sample_vocab_size, N=hp.num_layers)
-            # model.to(device)
-            for i, batch in enumerate(data_gen_tt2(data, device=device)):
-                out, stop_tokens = model.forward(batch.src, batch.trg,
-                                                 batch.src_mask, batch.trg_mask)
-                # print(out.shape)
-                # directly save every teacher-forced output
-                for b in range(out.shape[0]):
-                    print(out[b, :, :-1].unsqueeze(0).shape)
-                    wav = mel_to_wav(
-                        out[b, :, :-1].unsqueeze(0), filename="output_{}_{}".format(i+1, b+1))
-                    save_wav(wav, 'wav_output_{}_{}'.format(i+1, b+1))
+        # # test sampling
+        # with torch.no_grad():
+        #     # model = make_model(hp.sample_vocab_size, N=hp.num_layers)
+        #     # model.to(device)
+        #     for i, batch in enumerate(data_gen_tt2(data, device=device)):
+        #         out, stop_tokens = model.forward(batch.src, batch.trg,
+        #                                          batch.src_mask, batch.trg_mask)
+        #         # print(out.shape)
+        #         # directly save every teacher-forced output
+        #         for b in range(out.shape[0]):
+        #             print(out[b, :, :-1].unsqueeze(0).shape)
+        #             wav = mel_to_wav(
+        #                 out[b, :, :-1].unsqueeze(0), filename="output_{}_{}".format(i+1, b+1))
+        #             save_wav(wav, 'wav_output_{}_{}'.format(i+1, b+1))
 
             # print(
             #     "\n--------------- reconstruct mel to wave under same converter ---------------")
