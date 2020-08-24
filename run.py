@@ -68,7 +68,7 @@ def run_epoch(data_iter, model, loss_compute, begin_time):
         out, stop_tokens = model.forward(batch.src, batch.trg,
                                          batch.src_mask, batch.trg_mask)
         loss = loss_compute(out, batch.trg_y.transpose(-2, -1),
-                            stop_tokens, batch.stop_tokens, batch.nframes)
+                            stop_tokens, batch.stop_tokens, batch.nframes, model)
         total_loss += loss.data
         total_frames += batch.nframes
         frames += batch.nframes
@@ -225,8 +225,8 @@ if __name__ == "__main__":
         epoch = 10
         if args['--epoch']:
             epoch = int(args['--epoch'])
-        batch_size = 2
-        nbatches = 5
+        batch_size = 1
+        nbatches = 1
         print("batch_size, nbatches:", batch_size, nbatches)
 
         data = None
@@ -252,12 +252,12 @@ if __name__ == "__main__":
         model = model.to(device)
 
         keep = False
-        lr = 'NoanOpt'
-        model_opt = NoamOpt(hp.model_dim, 10, 2000,
+        lr = 'NoamOpt'
+        model_opt = NoamOpt(hp.model_dim, 2, 4000,
                             torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.999), eps=1e-9))
 
-        # lr = 3e-3#2e-5 'NoamOpt'  # hp.lr
-        # , betas=(0.9, 0.999), eps=1e-8, weight_decay=1e-5
+        # lr = 3e-3 #2e-5 'NoamOpt'  # hp.lr
+        # # , betas=(0.9, 0.999), eps=1e-8, weight_decay=1e-5
         # my_optim = torch.optim.Adam(model.parameters(), lr)
         # my_lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(my_optim,
         #                                                       max_lr=lr,
@@ -343,32 +343,32 @@ if __name__ == "__main__":
         # synthesize
         synthesize(model_saved_path, next(data_gen_tt2(data, device=device)), len(data['vocab']), device)
 
-        # # test sampling
-        # with torch.no_grad():
-        #     # model = make_model(hp.sample_vocab_size, N=hp.num_layers)
-        #     # model.to(device)
-        #     for i, batch in enumerate(data_gen_tt2(data, device=device)):
-        #         out, stop_tokens = model.forward(batch.src, batch.trg,
-        #                                          batch.src_mask, batch.trg_mask)
-        #         # print(out.shape)
-        #         # directly save every teacher-forced output
-        #         for b in range(out.shape[0]):
-        #             print(out[b, :, :-1].unsqueeze(0).shape)
-        #             wav = mel_to_wav(
-        #                 out[b, :, :-1].unsqueeze(0), filename="output_{}_{}".format(i+1, b+1))
-        #             save_wav(wav, 'wav_output_{}_{}'.format(i+1, b+1))
+        # test sampling
+        with torch.no_grad():
+            # model = make_model(hp.sample_vocab_size, N=hp.num_layers)
+            # model.to(device)
+            for i, batch in enumerate(data_gen_tt2(data, device=device)):
+                out, stop_tokens = model.forward(batch.src, batch.trg,
+                                                 batch.src_mask, batch.trg_mask)
+                # print(out.shape)
+                # directly save every teacher-forced output
+                for b in range(out.shape[0]):
+                    print(out[b, :, :-1].unsqueeze(0).shape)
+                    wav = mel_to_wav(
+                        out[b, :, :-1].unsqueeze(0), filename="output_{}_{}".format(i+1, b+1))
+                    save_wav(wav, 'wav_output_{}_{}'.format(i+1, b+1))
 
-            # print(
-            #     "\n--------------- reconstruct mel to wave under same converter ---------------")
-            # wav_original = mel_to_wav(batch_one.trg.transpose(
-            #     -2, -1)[0, :, 1:].unsqueeze(0), filename="reconstruct")
-            # save_wav(wav_original, 'wav_reconstruct')
+                print(
+                    "\n--------------- reconstruct mel to wave under same converter ---------------")
+                wav_original = mel_to_wav(batch.trg.transpose(
+                    -2, -1)[0, :, 1:].unsqueeze(0), filename="reconstruct")
+                save_wav(wav_original, 'wav_reconstruct')
 
-            # print(
-            #     "\n--------------- source conversion only using librosa ---------------")
-            # wav_source = mel_to_wav(
-            #     get_mel('./outputs/samples/LJ001-0001.wav').T.unsqueeze(0), filename="source")
-            # save_wav(wav_source, 'wav_source')
+                # print(
+                #     "\n--------------- source conversion only using librosa ---------------")
+                # wav_source = mel_to_wav(
+                #     get_mel('./outputs/samples/LJ001-0001.wav').T.unsqueeze(0), filename="source")
+                # save_wav(wav_source, 'wav_source')
 
     else:
         print("\n\nWhat else?\n\n")

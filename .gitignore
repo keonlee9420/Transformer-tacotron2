@@ -142,3 +142,4 @@ temp*
 *.png
 /weights
 /outputs
+/nohup.out

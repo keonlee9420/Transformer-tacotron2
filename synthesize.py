@@ -20,8 +20,8 @@ def synthesize(model_saved_path, batch_one, vocab_size=hp.sample_vocab_size, dev
 
     actual_len = batch_one.trg.shape[1]
     given_hints = 0
-    mel_inout = torch.empty((batch_one.trg.shape[0], 1, 80)).fill_(BOS).to(device)
-    # mel_inout = batch_one.trg[:, :given_hints+1, :]
+    # mel_inout = torch.empty((batch_one.trg.shape[0], 1, 80)).fill_(BOS).to(device)
+    mel_inout = batch_one.trg[:, :given_hints+1, :]
 
     with torch.no_grad():
 
@@ -35,8 +35,8 @@ def synthesize(model_saved_path, batch_one, vocab_size=hp.sample_vocab_size, dev
             # if i % 1 == 0:  # if condition is i%1 == 'teacher forcing'
             #     hints = batch_one.trg[:, :given_hints+i+1, :]
             # else:
-            # hints = mel_inout[:, :given_hints+i+1, :]
-            hints = mel_inout
+            hints = mel_inout[:, :given_hints+i+1, :]
+            # hints = mel_inout
             trg_mask = batch_one.make_std_mask(hints, hp.pad_token)
             out, stop_tokens = model.forward(batch_one.src, hints,
                                                 batch_one.src_mask, trg_mask)

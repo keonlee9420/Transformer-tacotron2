@@ -197,7 +197,7 @@ class SimpleTT2LossCompute:
         self.stop = stop_criterion
         self.opt = opt
 
-    def __call__(self, x, y, stop_x, stop_y, norm):
+    def __call__(self, x, y, stop_x, stop_y, norm, model):
         # calculate stop loss including impose positive weight as Sec 3.7.
         # print("stop_x shape and dtype", stop_x.shape, stop_x.dtype, stop_x[:,-3:,:])
         # print("stop_y shape and dtype", stop_y.shape, stop_y.dtype, stop_y[:,-3:,:])
@@ -207,6 +207,7 @@ class SimpleTT2LossCompute:
 
         loss = self.criterion(x, y) + stop_loss
         loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(), 1.)
         if self.opt is not None:
             self.opt.step(loss)
             self.opt.optimizer.zero_grad()

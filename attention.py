@@ -35,8 +35,8 @@ class MultiHeadedAttention(nn.Module):
         # We assume d_v always equals d_k
         self.d_k = d_model // h
         self.h = h
-        self.linears = clones(nn.Linear(d_model, d_model), 4)
-        # self.final_linear = nn.Linear(2*d_model, d_model)
+        self.linears = clones(nn.Linear(d_model, d_model), 3)
+        self.final_linear = nn.Linear(2*d_model, d_model)
         self.attn = None
         self.dropout = nn.Dropout(p=dropout)
 
@@ -62,7 +62,7 @@ class MultiHeadedAttention(nn.Module):
         x = x.transpose(1, 2).contiguous() \
              .view(nbatches, -1, self.h * self.d_k)
 
-        # # 4) "Concat" with query information
-        # x = torch.cat([raw_q, x], dim=-1)
+        # 4) "Concat" with query information
+        x = torch.cat([raw_q, x], dim=-1)
 
-        return self.linears[-1](x)
+        return self.final_linear(x)

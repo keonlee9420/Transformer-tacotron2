@@ -207,6 +207,7 @@ def mel_to_wav(decoder_output, filename=None):
     # S = librosa.feature.inverse.mel_to_stft(
     #     power.numpy(), sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.hop_length, win_length=hp.win_length)
     # y = librosa.griffinlim(S)
+
     import time
     bt = time.time()
     print("stpe_1 {:.2f}".format(time.time() - bt))
