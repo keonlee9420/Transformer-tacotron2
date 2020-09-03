@@ -157,7 +157,7 @@ def get_sample_batch(batch_size, start=0, vocab=None, random=False):
     print("get_sample_batch idx.shape, idx:", idx.shape, idx)
 
     # text-to-phoneme
-    csv_data = pd.read_csv(hp.csv_dir, sep='|', header=None)
+    csv_data = pd.read_csv(hp.csv_dir_simple, sep='|', header=None)
 
     texts = list(csv_data[2][idx])
     # print("texts:", texts)

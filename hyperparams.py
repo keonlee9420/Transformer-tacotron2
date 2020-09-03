@@ -13,10 +13,13 @@ loss_w_stop = 1e-4
 # Data Parameters             #
 ################################
 sample_vocab_size = 100
-csv_dir = '/home/ubuntu/Kyumin/Transformer/LJSpeech-1.1/metadata.csv'
-audio_dir = '/home/ubuntu/Kyumin/Transformer/LJSpeech-1.1/wavs/LJ001-{}.wav'
+data_dir = '/home/keon/speech-datasets/LJSpeech-1.1'
+prepared_data_dir = './prepared_data'
+csv_dir_simple = '/home/keon/speech-datasets/LJSpeech-1.1/metadata.csv'
+audio_dir_simple = '/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'
 weight_dir = './weights'
 output_dir = './outputs'
+cleaners='english_cleaners'
 
 
 ################################
@@ -40,6 +43,7 @@ ref_db = 20
 # Make model
 num_layers = 6
 model_dim = 512
+num_embeddings = 1024
 d_ff = 2048
 num_heads = 8
 model_dropout = 0.1

@@ -16,3 +16,6 @@ dependencies:
   - spacy
   - phonemizer
   - librosa
+  - falcon
+  - inflect
+  - Unidecode

@@ -36,7 +36,7 @@ import hyperparams as hp
 import spacy
 
 
-def make_model(src_vocab, N=hp.num_layers,
+def make_model(src_vocab=hp.num_embeddings, N=hp.num_layers,
                d_model=hp.model_dim, d_ff=hp.d_ff, h=hp.num_heads, dropout=hp.model_dropout):
     """Helper: Construct a model from hyperparameters."""
     c = copy.deepcopy
@@ -225,8 +225,8 @@ if __name__ == "__main__":
         epoch = 10
         if args['--epoch']:
             epoch = int(args['--epoch'])
-        batch_size = 1
-        nbatches = 1
+        batch_size = 3
+        nbatches = 5
         print("batch_size, nbatches:", batch_size, nbatches)
 
         data = None
