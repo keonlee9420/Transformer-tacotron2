@@ -283,8 +283,8 @@ if __name__ == "__main__":
         begin_time = time.time()
         model_save_path = hp.weight_dir
         output_save_path = hp.output_dir
-        model_pt_filename = 'simple-tt2-{}-{}-{}_{}.pt'.format(
-            epoch, batch_size, nbatches, str(lr))
+        model_pt_filename = 'simple-tt2-{}-{}-{}_{}-loss{}.pt'.format(
+            epoch, batch_size, nbatches, str(lr), hp.loss_w_stop)
         model_saved_path = os.path.join(model_save_path, model_pt_filename)
         print("model_saved_path:", model_saved_path)
 

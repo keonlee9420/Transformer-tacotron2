@@ -6,12 +6,15 @@ batch_size = 30
 pad_token = 0
 lr = 5e-6
 
+# Loss proportion adjustment
+loss_w_stop = 1e-4
+
 ################################
 # Data Parameters             #
 ################################
 sample_vocab_size = 100
-csv_dir = '/home/keon/speech-datasets/LJSpeech-1.1/metadata.csv'
-audio_dir = '/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'
+csv_dir = '/home/ubuntu/Kyumin/Transformer/LJSpeech-1.1/metadata.csv'
+audio_dir = '/home/ubuntu/Kyumin/Transformer/LJSpeech-1.1/wavs/LJ001-{}.wav'
 weight_dir = './weights'
 output_dir = './outputs'
 

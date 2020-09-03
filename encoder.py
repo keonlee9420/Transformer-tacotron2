@@ -150,7 +150,6 @@ class Embeddings(nn.Module):
 class EncoderPrenet(nn.Module):
     def __init__(self, in_channels, out_channels, dropout):
         super(EncoderPrenet, self).__init__()
-
         self.conv1 = nn.Sequential(ConvNorm(in_channels, out_channels),
                                    nn.BatchNorm1d(out_channels),
                                    nn.ReLU(), nn.Dropout(dropout))
@@ -159,11 +158,13 @@ class EncoderPrenet(nn.Module):
             self.convs.append(nn.Sequential(ConvNorm(out_channels, out_channels),
                                             nn.BatchNorm1d(out_channels),
                                             nn.ReLU(), nn.Dropout(dropout)))
+        self.projection = Linear(out_channels, out_channels)
 
     def forward(self, x):
         for m in self.convs:
             x = m(x)
-        return x
+        out = self.projection(x.transpose(-2, -1))
+        return out.transpose(-2, -1)
 
 
 def sample_encoding(sample_batch):

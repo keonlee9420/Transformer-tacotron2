@@ -205,7 +205,7 @@ class SimpleTT2LossCompute:
         stop_loss[:, -1, :] *= hp.positive_stop_weight
         stop_loss = torch.mean(stop_loss)
 
-        loss = self.criterion(x, y) + stop_loss
+        loss = self.criterion(x, y) + hp.loss_w_stop * stop_loss
         loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), 1.)
         if self.opt is not None:
