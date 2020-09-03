@@ -3,45 +3,47 @@
 
 import hyperparams as hp
 import pandas as pd
+import torch
 from torch.utils.data import Dataset, DataLoader
+from utils import *
 import os
 import librosa
 import numpy as np
 from text import text_to_sequence
 import math
+import collections
 
 
 class LJDatasets(Dataset):
     """LJSpeech dataset."""
 
-    def __init__(self, csv_file, root_dir):
+    def __init__(self, csv_file, root_dir, out_dir):
         """
         Args:
             csv_file (string): Path to the csv file with annotations.
             root_dir (string): Directory with all the wavs.
+            out_dir  (string): Directory with all the prepared data.
 
         """
         self.landmarks_frame = pd.read_csv(csv_file, sep='|', header=None)
         self.root_dir = root_dir
+        self.out_dir = out_dir
 
     def load_wav(self, filename):
         return librosa.load(filename, sr=hp.sr)
 
     def __len__(self):
-        return len(self.landmarks_frame)
+        return 186
+        # return len(self.landmarks_frame)
 
     def __getitem__(self, idx):
-        wav_name = os.path.join(self.root_dir, self.landmarks_frame.iloc[idx, 0]) + '.wav'
-        text = self.landmarks_frame.iloc[idx, 1]
+        prepared_data = np.load(os.path.join(self.out_dir, self.landmarks_frame.iloc[idx, 0] + '.npy'), allow_pickle=True)
 
-        text = np.asarray(text_to_sequence(text, [hp.cleaners]), dtype=np.int32)
-        mel = np.load(wav_name[:-4] + '.pt.npy')
-        mel_input = np.concatenate([np.zeros([1,hp.num_mels], np.float32), mel[:-1,:]], axis=0)
+        mel = prepared_data.item().get('mel')
+        text = prepared_data.item().get('text')
         text_length = len(text)
-        pos_text = np.arange(1, text_length + 1)
-        pos_mel = np.arange(1, mel.shape[0] + 1)
 
-        sample = {'text': text, 'mel': mel, 'text_length':text_length, 'mel_input':mel_input, 'pos_mel':pos_mel, 'pos_text':pos_text}
+        sample = {'mel': mel, 'text': text, 'text_length':text_length}
 
         return sample
 
@@ -53,26 +55,32 @@ def collate_fn_transformer(batch):
 
         text = [d['text'] for d in batch]
         mel = [d['mel'] for d in batch]
-        mel_input = [d['mel_input'] for d in batch]
         text_length = [d['text_length'] for d in batch]
-        pos_mel = [d['pos_mel'] for d in batch]
-        pos_text= [d['pos_text'] for d in batch]
         
         text = [i for i,_ in sorted(zip(text, text_length), key=lambda x: x[1], reverse=True)]
         mel = [i for i, _ in sorted(zip(mel, text_length), key=lambda x: x[1], reverse=True)]
-        mel_input = [i for i, _ in sorted(zip(mel_input, text_length), key=lambda x: x[1], reverse=True)]
-        pos_text = [i for i, _ in sorted(zip(pos_text, text_length), key=lambda x: x[1], reverse=True)]
-        pos_mel = [i for i, _ in sorted(zip(pos_mel, text_length), key=lambda x: x[1], reverse=True)]
         text_length = sorted(text_length, reverse=True)
-        # PAD sequences with largest length of the batch
-        text = _prepare_data(text).astype(np.int32)
-        mel = _pad_mel(mel)
-        mel_input = _pad_mel(mel_input)
-        pos_mel = _prepare_data(pos_mel).astype(np.int32)
-        pos_text = _prepare_data(pos_text).astype(np.int32)
 
+        # padding
+        text = pad_seq(text).astype(np.int32)
+        mel, stop_token = pad_mel(mel)
 
-        return t.LongTensor(text), t.FloatTensor(mel), t.FloatTensor(mel_input), t.LongTensor(pos_text), t.LongTensor(pos_mel), t.LongTensor(text_length)
+        return torch.LongTensor(text), torch.FloatTensor(mel),  torch.FloatTensor(stop_token), torch.LongTensor(text_length)
     
     raise TypeError(("batch must contain tensors, numbers, dicts or lists; found {}"
                 .format(type(batch[0]))))
+
+
+def get_data_dir(d_name):
+    if not d_name:
+        d_dir = 'LJSpeech-1.1'
+    # elif d_name=='libritts':
+    #     d_dir = 'LibriTTS'
+    else:
+        raise NotImplementedError(hp.load_error_msg)
+
+    return os.path.join(hp.prepared_data_dir, d_dir)
+
+
+def get_dataset(prepared_data_dir):
+    return LJDatasets(os.path.join(hp.data_dir,'metadata.csv'), os.path.join(hp.data_dir,'wavs'), get_data_dir(prepared_data_dir))

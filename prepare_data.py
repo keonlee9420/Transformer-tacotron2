@@ -1,19 +1,30 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+Usage:
+    prepare_data.py [options]
+
+Options:
+    -h --help                               show this screen.
+    --dataset=<name>                        specify data to train on  ['ljspeech' | '']
+"""
+
 import os
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
+from docopt import docopt
 from utils import get_mel
 from text import text_to_sequence
+from preprocess import get_data_dir
 import hyperparams as hp
 import librosa
 
 class PrepareDataset(Dataset):
     """LJSpeech dataset."""
 
-    def __init__(self, csv_file, root_dir, out_dir=hp.prepared_data_dir):
+    def __init__(self, csv_file, root_dir, out_dir):
         """
         Args:
             csv_file (string): Path to the csv file with annotations.
@@ -46,7 +57,8 @@ class PrepareDataset(Dataset):
         return sample
     
 if __name__ == '__main__':
-    dataset = PrepareDataset(os.path.join(hp.data_dir,'metadata.csv'), os.path.join(hp.data_dir,'wavs'))
+    args = docopt(__doc__)
+    dataset = PrepareDataset(os.path.join(hp.data_dir,'metadata.csv'), os.path.join(hp.data_dir,'wavs'), get_data_dir(args['--dataset']))
     dataloader = DataLoader(dataset, batch_size=1, drop_last=False, num_workers=8)
     from tqdm import tqdm
     pbar = tqdm(dataloader)

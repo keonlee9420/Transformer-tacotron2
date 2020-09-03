@@ -134,6 +134,7 @@ temp*
 
 # data
 /.data
+/prepared_data
 
 # editor
 /.vscode
@@ -142,6 +143,8 @@ temp*
 *.png
 /weights
 /outputs
+/logs
 /nohup.out
+/runs
 
 *.npy

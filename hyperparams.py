@@ -1,8 +1,14 @@
 ################################
 # Experiment Parameters        #
 ################################
+epochs=100000
+batch_size = 16
+save_step = 2000
+image_step = 500
+
 # Simple train
-batch_size = 30
+csv_dir_simple = '/home/keon/speech-datasets/LJSpeech-1.1/metadata.csv'
+audio_dir_simple = '/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'
 pad_token = 0
 lr = 5e-6
 
@@ -10,17 +16,19 @@ lr = 5e-6
 loss_w_stop = 1e-4
 
 ################################
-# Data Parameters             #
+# Data Parameters              #
 ################################
+prepared_data_dir = './prepared_data'
+checkpoint_path = './checkpoint'
+log_dir = './logs'
+output_dir = './outputs'
+cleaners ='english_cleaners'
+load_error_msg = "This type of dataset is not supported(yet)."
+
+# Simple train
 sample_vocab_size = 100
 data_dir = '/home/keon/speech-datasets/LJSpeech-1.1'
-prepared_data_dir = './prepared_data'
-csv_dir_simple = '/home/keon/speech-datasets/LJSpeech-1.1/metadata.csv'
-audio_dir_simple = '/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'
 weight_dir = './weights'
-output_dir = './outputs'
-cleaners='english_cleaners'
-
 
 ################################
 # Audio Parameters             #
