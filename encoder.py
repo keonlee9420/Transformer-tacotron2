@@ -95,11 +95,13 @@ class Encoder(nn.Module):
         x = self.pos(x)
 
         # encoder
+        attn_enc = list()
         for layer in self.layers:
             x = layer(x, mask)
+            attn_enc.append(layer.self_attn.attn)
         memory = self.norm(x)
 
-        return memory
+        return memory, attn_enc
 
 
 class SublayerConnection(nn.Module):

@@ -31,13 +31,16 @@ from run import make_model
 def main():
     args = docopt(__doc__)
 
+    if not os.path.isdir(hp.checkpoint_path):
+        os.mkdir(hp.checkpoint_path)
+
     device = torch.device("cuda:0" if args['--cuda'] else "cpu")
     print('use device: %s' % device, file=sys.stderr)
 
     dataset = get_dataset(args['--dataset'])
     global_step = 0
 
-    model = make_model().to(device)
+    model = nn.DataParallel(make_model().to(device))
 
     model.train()
     model_opt = NoamOpt(hp.model_dim, 2, 4000,
@@ -72,8 +75,7 @@ def main():
 
             batch = Batch(text, {'trg': mel, 'trg_stops': stop_token})
             
-            out, stop_tokens = model.forward(batch.src, batch.trg, batch.src_mask, batch.trg_mask)
-            
+            out, stop_tokens, attn_enc, attn_dec, attn_endec = model.forward(batch.src, batch.trg, batch.src_mask, batch.trg_mask)
             loss = loss_compute(out, batch.trg_y.transpose(-2, -1),
                                 stop_tokens, batch.stop_tokens, batch.nframes, model)
             total_loss += loss.data
@@ -85,36 +87,36 @@ def main():
                 }, global_step)
                 
             writer.add_scalars('alphas',{
-                    'encoder_alpha':model.encoder.pos.alpha.data,
-                    'decoder_alpha':model.decoder.pos.alpha.data,
+                    'encoder_alpha':model.module.encoder.pos.alpha.data,
+                    'decoder_alpha':model.module.decoder.pos.alpha.data,
                 }, global_step)
             
             
-            # if global_step % hp.image_step == 1:
+            if global_step % hp.image_step == 1:
                 
-            #     for i, prob in enumerate(attn_probs):
-                    
-            #         num_h = prob.size(0)
-            #         for j in range(4):
-                
-            #             x = vutils.make_grid(prob[j*16] * 255)
-            #             writer.add_image('Attention_%d_0'%global_step, x, i*4+j)
-                
-            #     for i, prob in enumerate(attns_enc):
-            #         num_h = prob.size(0)
-                    
-            #         for j in range(4):
-                
-            #             x = vutils.make_grid(prob[j*16] * 255)
-            #             writer.add_image('Attention_enc_%d_0'%global_step, x, i*4+j)
-            
-            #     for i, prob in enumerate(attns_dec):
+                for i, prob in enumerate(attn_endec):
+                    num_h = prob.size(0)
 
-            #         num_h = prob.size(0)
-            #         for j in range(4):
+                    for j in range(hp.num_heads):
+                        x = vutils.make_grid((prob[j*hp.batch_size] * 255))
+                        writer.add_image('Attention_%d_0'%global_step, x, i*hp.num_heads+j)
                 
-            #             x = vutils.make_grid(prob[j*16] * 255)
-            #             writer.add_image('Attention_dec_%d_0'%global_step, x, i*4+j)
+                for i, prob in enumerate(attn_enc):
+                    num_h = prob.size(0)
+                    
+                    for j in range(hp.num_heads):
+                
+                        x = vutils.make_grid(prob[j*hp.batch_size] * 255)
+                        writer.add_image('Attention_enc_%d_0'%global_step, x, i*hp.num_heads+j)
+            
+                for i, prob in enumerate(attn_dec):
+
+                    num_h = prob.size(0)
+                    for j in range(hp.num_heads):
+                
+                        x = vutils.make_grid(prob[j*hp.batch_size] * 255)
+                        writer.add_image('Attention_dec_%d_0'%global_step, x, i*hp.num_heads+j)
+                print('Update Attention! at global step: {}'.format(global_step))
 
             if global_step % hp.save_step == 0:
                 torch.save({'model':model.state_dict(),

@@ -146,5 +146,6 @@ temp*
 /logs
 /nohup.out
 /runs
+/checkpoint
 
 *.npy

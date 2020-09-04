@@ -63,7 +63,7 @@ def run_epoch(data_iter, model, loss_compute, begin_time):
     for i, batch in enumerate(data_iter):
         # print("INNER run_epoch: ", batch.src.shape, batch.trg.shape)
         # print("INNER run_epoch: ", batch.src_mask.shape, batch.trg_mask.shape)
-        out, stop_tokens = model.forward(batch.src, batch.trg,
+        out, stop_tokens, attn_enc, attn_dec, attn_endec = model.forward(batch.src, batch.trg,
                                          batch.src_mask, batch.trg_mask)
         loss = loss_compute(out, batch.trg_y.transpose(-2, -1),
                             stop_tokens, batch.stop_tokens, batch.nframes, model)

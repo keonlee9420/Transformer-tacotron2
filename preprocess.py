@@ -33,8 +33,7 @@ class LJDatasets(Dataset):
         return librosa.load(filename, sr=hp.sr)
 
     def __len__(self):
-        return 186
-        # return len(self.landmarks_frame)
+        return len(self.landmarks_frame)
 
     def __getitem__(self, idx):
         prepared_data = np.load(os.path.join(self.out_dir, self.landmarks_frame.iloc[idx, 0] + '.npy'), allow_pickle=True)
@@ -83,4 +82,6 @@ def get_data_dir(d_name):
 
 
 def get_dataset(prepared_data_dir):
-    return LJDatasets(os.path.join(hp.data_dir,'metadata.csv'), os.path.join(hp.data_dir,'wavs'), get_data_dir(prepared_data_dir))
+    data_dir = get_data_dir(prepared_data_dir)
+    print('use dataset: %s' % data_dir.split("/")[-1])
+    return LJDatasets(os.path.join(hp.data_dir,'metadata.csv'), os.path.join(hp.data_dir,'wavs'), data_dir)

@@ -41,8 +41,12 @@ class Decoder(nn.Module):
         x = self.pos(x)
 
         # decoder
+        attn_dec = list()
+        attn_endec = list()
         for layer in self.layers:
             x = layer(x, memory, src_mask, tgt_mask)
+            attn_dec.append(layer.self_attn.attn)
+            attn_endec.append(layer.src_attn.attn)
         x = self.norm(x)
 
         # mel linear
@@ -55,7 +59,7 @@ class Decoder(nn.Module):
         # (batch, mel_channels, n_frames)
         mels = self.decoder_postnet(mel_linear.transpose(-2, -1))
 
-        return mels, stop_tokens
+        return mels, stop_tokens, attn_dec, attn_endec
 
 
 class DecoderLayer(nn.Module):

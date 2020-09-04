@@ -22,8 +22,9 @@ class EncoderDecoder(nn.Module):
 
     def forward(self, src, tgt, src_mask, tgt_mask):
         """Take in and process masked src and target sequences."""
-        return self.decode(self.encode(src, src_mask), src_mask,
-                           tgt, tgt_mask)
+        memory, attn_enc = self.encode(src, src_mask)
+        mels, stop_tokens, attn_dec, attn_endec = self.decode(memory, src_mask, tgt, tgt_mask)
+        return mels, stop_tokens, attn_enc, attn_dec, attn_endec
 
     def encode(self, src, src_mask):
         # print("ENCODER INPUT shape:", self.src_embed(src).shape)
