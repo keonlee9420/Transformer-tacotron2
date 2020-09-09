@@ -25,7 +25,7 @@ def build_phone_vocab(texts, vocab=None):
                  '</s>': EOS, }
     idx = len(vocab)
     for text in texts:
-        phoneset = [p for p in phoneme(text).split(' ') if p]
+        phoneset = [p for p in _phonemize(text).split(' ') if p]
 
         for phone in phoneset:
             if phone.strip() not in vocab:
@@ -34,7 +34,7 @@ def build_phone_vocab(texts, vocab=None):
     return vocab
 
 
-def phoneme(text):
+def _phonemize(text):
     return phonemize(text,
                      separator=separator.Separator(
                          word=' <wb> ', syllable=' <sylb> ', phone=' '),
@@ -42,7 +42,7 @@ def phoneme(text):
 
 
 def get_phoneme(text, vocab):
-    to_phoneme = [vocab[p] for p in phoneme(text).split(' ') if p]
+    to_phoneme = [vocab[p] for p in _phonemize(text).split(' ') if p]
     return torch.tensor(to_phoneme)
 
 

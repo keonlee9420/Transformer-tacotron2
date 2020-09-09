@@ -19,39 +19,11 @@ Options:
 import sys
 import time
 from docopt import docopt
-import torch
-import torch.nn as nn
-from torchtext import data, datasets
 
-from attention import *
 from model import *
-from encoder import *
-from decoder import *
 from schedule import *
 from utils import *
 import hyperparams as hp
-
-import spacy
-
-
-def make_model(src_vocab=hp.num_embeddings, N=hp.num_layers,
-               d_model=hp.model_dim, d_ff=hp.d_ff, h=hp.num_heads, dropout=hp.model_dropout):
-    """Helper: Construct a model from hyperparameters."""
-    c = copy.deepcopy
-    attn = MultiHeadedAttention(h, d_model)
-    ff = PositionwiseFeedForward(d_model, d_ff, dropout)
-    model = EncoderDecoder(
-        Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
-        Decoder(DecoderLayer(d_model, c(attn), c(attn),
-                             c(ff), dropout), N),
-        Embeddings(d_model, src_vocab))
-
-    # This was important from their code.
-    # Initialize parameters with Glorot / fan_avg.
-    for p in model.parameters():
-        if p.dim() > 1:
-            nn.init.xavier_uniform_(p)
-    return model
 
 
 def run_epoch(data_iter, model, loss_compute, begin_time):

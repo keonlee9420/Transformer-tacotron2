@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import math
-from encoder import clones
+from .modules import *
 import hyperparams as hp
 
 

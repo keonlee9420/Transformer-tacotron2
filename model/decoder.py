@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import numpy as np
-import torch
 import torch.nn as nn
-from schedule import subsequent_mask
-from model import PositionalEncoding
-from encoder import clones, Linear, LayerNorm, ConvNorm, SublayerConnection, sample_encoding
 import hyperparams as hp
+from .modules import *
 
 
 class Decoder(nn.Module):
@@ -223,10 +219,9 @@ if __name__ == "__main__":
     # save spectrogram
     save_mel(mel_batch, normalized=True)
 
-    from attention import *
-    from model import *
-    from encoder import *
-    from decoder import *
+    from model.attention import *
+    from model.encoder import *
+    from model.decoder import *
     import hyperparams as hp
 
     c = copy.deepcopy

@@ -1,7 +1,7 @@
 ################################
 # Experiment Parameters        #
 ################################
-epochs=100000
+epochs = 1
 batch_size = 16
 save_step = 2000
 image_step = 500
@@ -22,12 +22,12 @@ prepared_data_dir = './prepared_data'
 checkpoint_path = './checkpoint'
 log_dir = './logs'
 output_dir = './outputs'
-cleaners ='english_cleaners'
+cleaners = 'english_cleaners'
 load_error_msg = "This type of dataset is not supported(yet)."
 
 # Simple train
 sample_vocab_size = 100
-data_dir = '/home/keon/speech-datasets/LJSpeech-1.1'
+data_dir = '/home/ubuntu/Kyumin/Transformer/LJSpeech-1.1'
 weight_dir = './weights'
 
 ################################
