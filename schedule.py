@@ -6,8 +6,8 @@ import torch.nn as nn
 import numpy as np
 import hyperparams as hp
 
-from torchtext import data, datasets
 from utils import EOS
+import time
 
 
 class NoamOpt:
@@ -206,33 +206,15 @@ class SimpleTT2LossCompute:
         stop_loss = torch.mean(stop_loss)
 
         loss = self.criterion(x, y) + hp.loss_w_stop * stop_loss
+        t0 = time.time()
         loss.backward()
+        print('backprop: %.6f' % (time.time() - t0))
         nn.utils.clip_grad_norm_(model.parameters(), 1.)
         if self.opt is not None:
             self.opt.step(loss)
             self.opt.optimizer.zero_grad()
             # self.opt.zero_grad()
         return loss.data.item() * norm
-
-
-class MyIterator(data.Iterator):
-    def create_batches(self):
-        if self.train:
-            def pool(d, random_shuffler):
-                for p in data.batch(d, self.batch_size * 100):
-                    p_batch = data.batch(
-                        sorted(p, key=self.sort_key),
-                        self.batch_size, self.batch_size_fn)
-                    for b in random_shuffler(list(p_batch)):
-                        yield b
-
-            self.batches = pool(self.data(), self.random_shuffler)
-
-        else:
-            self.batches = []
-            for b in data.batch(self.data(), self.batch_size,
-                                self.batch_size_fn):
-                self.batches.append(sorted(b, key=self.sort_key))
 
 
 def rebatch(pad_idx, batch):

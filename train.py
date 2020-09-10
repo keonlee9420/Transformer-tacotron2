@@ -17,12 +17,15 @@ Options:
 
 import os
 import sys
+import time
+
 import torch
 import torch.nn as nn
 import torchvision.utils as vutils
 from tensorboardX import SummaryWriter
 from docopt import docopt
 from tqdm import tqdm
+
 import hyperparams as hp
 from preprocess import DataLoader, collate_fn_transformer, get_data_dir, get_dataset
 from schedule import NoamOpt, Batch, SimpleTT2LossCompute
@@ -30,6 +33,7 @@ from model import make_model
 
 
 def main():
+    t0 = time.time()
     args = docopt(__doc__)
 
     if not os.path.isdir(hp.checkpoint_path):
@@ -42,6 +46,8 @@ def main():
     global_step = 0
 
     model = nn.DataParallel(make_model().to(device))
+    t1 = time.time()
+    print('model loaded: %.6f' % (t1 - t0))
 
     model.train()
     model_opt = NoamOpt(hp.model_dim, 2, 4000,
@@ -55,7 +61,8 @@ def main():
     loss_compute = SimpleTT2LossCompute(criterion, stop_criterion, model_opt)
 
     writer = SummaryWriter(hp.log_dir)
-
+    t2 = time.time()
+    print('before epoch: %.6f' % (t2 - t1))
     for epoch in range(hp.epochs):
 
         total_loss = 0
@@ -68,6 +75,7 @@ def main():
             pbar.set_description("Processing at epoch %d" % epoch)
             global_step += 1
 
+            t3 = time.time()
             text, mel, stop_token, text_length = data
 
             text = text.to(device)
@@ -76,14 +84,20 @@ def main():
             text_length = text_length.to(device)
 
             batch = Batch(text, {'trg': mel, 'trg_stops': stop_token})
+            t4 = time.time()
+            print('epoch %d - data loading: %.6f' % (epoch, (t4 - t3)))
 
             out, stop_tokens, attn_enc, attn_dec, attn_endec = model.forward(batch.src, batch.trg, batch.src_mask,
                                                                              batch.trg_mask)
+            t5 = time.time()
+            print('forward model: %.6f' % (t5 - t4))
             loss = loss_compute(out, batch.trg_y.transpose(-2, -1),
                                 stop_tokens, batch.stop_tokens, batch.nframes, model)
             total_loss += loss.data
             total_frames += batch.nframes
             pbar.set_postfix(loss='{0:.6f}'.format(total_loss / total_frames * 1000))
+            t6 = time.time()
+            print('loss calculation: %.6f' % (t6 - t5))
 
             writer.add_scalars('training_loss', {
                 'loss': loss,
@@ -119,6 +133,9 @@ def main():
                             'optimizer': model_opt.optimizer.state_dict()},
                            os.path.join(hp.checkpoint_path, 'checkpoint_tt2_%d.pth.tar' % global_step))
                 print('Saved! Model|checkpoint_tt2_{}.pth.tar, LOSS|{}'.format(global_step, loss))
+
+            t7 = time.time()
+            print('write & save: %d' % (t7 - t6))
 
 
 if __name__ == '__main__':

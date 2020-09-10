@@ -49,7 +49,7 @@ ref_db = 20
 # Model Parameters             #
 ################################
 # Make model
-num_layers = 6
+num_layers = 3
 model_dim = 512
 num_embeddings = 1024
 d_ff = 2048

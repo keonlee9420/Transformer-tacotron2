@@ -65,7 +65,7 @@ class Embeddings(nn.Module):
         # print("\n\nINNER EMBEDDINGS!")
         # print(x.shape)
         # print(self.lut(x).shape)
-        return self.lut(x) * math.sqrt(self.d_model)
+        return self.lut(x)
 
 
 def clones(module, N):

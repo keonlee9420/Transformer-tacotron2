@@ -32,7 +32,7 @@ class MultiHeadedAttention(nn.Module):
         self.d_k = d_model // h
         self.h = h
         self.linears = clones(nn.Linear(d_model, d_model), 3)
-        self.final_linear = nn.Linear(2*d_model, d_model)
+        self.final_linear = nn.Linear(2 * d_model, d_model)
         self.attn = None
         self.dropout = nn.Dropout(p=dropout)
 
