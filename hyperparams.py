@@ -1,10 +1,10 @@
 ################################
 # Experiment Parameters        #
 ################################
-epochs = 1
+epochs = 10000
 batch_size = 16
-save_step = 2000
-image_step = 500
+save_step = 20000
+image_step = 10000
 
 # Simple train
 csv_dir_simple = '/home/keon/speech-datasets/LJSpeech-1.1/metadata.csv'

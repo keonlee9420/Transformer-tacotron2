@@ -30,10 +30,11 @@ import hyperparams as hp
 from preprocess import DataLoader, collate_fn_transformer, get_data_dir, get_dataset
 from schedule import NoamOpt, Batch, SimpleTT2LossCompute
 from model import make_model
+from plot_utils import plot_alignment_to_numpy
 
 
 def main():
-    t0 = time.time()
+    # t0 = time.time()
     args = docopt(__doc__)
 
     if not os.path.isdir(hp.checkpoint_path):
@@ -46,8 +47,8 @@ def main():
     global_step = 0
 
     model = nn.DataParallel(make_model().to(device))
-    t1 = time.time()
-    print('model loaded: %.6f' % (t1 - t0))
+    # t1 = time.time()
+    # print('model loaded: %.6f' % (t1 - t0))
 
     model.train()
     model_opt = NoamOpt(hp.model_dim, 2, 4000,
@@ -61,8 +62,8 @@ def main():
     loss_compute = SimpleTT2LossCompute(criterion, stop_criterion, model_opt)
 
     writer = SummaryWriter(hp.log_dir)
-    t2 = time.time()
-    print('before epoch: %.6f' % (t2 - t1))
+    # t2 = time.time()
+    # print('before epoch: %.6f' % (t2 - t1))
     for epoch in range(hp.epochs):
 
         total_loss = 0
@@ -84,20 +85,20 @@ def main():
             text_length = text_length.to(device)
 
             batch = Batch(text, {'trg': mel, 'trg_stops': stop_token})
-            t4 = time.time()
-            print('epoch %d - data loading: %.6f' % (epoch, (t4 - t3)))
+            # t4 = time.time()
+            # print('epoch %d - data loading: %.6f' % (epoch, (t4 - t3)))
 
             out, stop_tokens, attn_enc, attn_dec, attn_endec = model.forward(batch.src, batch.trg, batch.src_mask,
                                                                              batch.trg_mask)
-            t5 = time.time()
-            print('forward model: %.6f' % (t5 - t4))
+            # t5 = time.time()
+            # print('forward model: %.6f' % (t5 - t4))
             loss = loss_compute(out, batch.trg_y.transpose(-2, -1),
                                 stop_tokens, batch.stop_tokens, batch.nframes, model)
             total_loss += loss.data
             total_frames += batch.nframes
             pbar.set_postfix(loss='{0:.6f}'.format(total_loss / total_frames * 1000))
-            t6 = time.time()
-            print('loss calculation: %.6f' % (t6 - t5))
+            # t6 = time.time()
+            # print('loss calculation: %.6f' % (t6 - t5))
 
             writer.add_scalars('training_loss', {
                 'loss': loss,
@@ -112,20 +113,23 @@ def main():
                 for ii, prob in enumerate(attn_endec):
                     num_h = prob.size(0)
                     for j in range(hp.num_heads):
-                        x = vutils.make_grid((prob[j * hp.batch_size] * 255))
-                        writer.add_image('Attention_%d_0' % global_step, x, ii * hp.num_heads + j)
+                        # x = vutils.make_grid((prob[j * hp.batch_size] * 255))
+                        x = plot_alignment_to_numpy((prob[j * hp.batch_size] * 255).cpu().detach().numpy())
+                        writer.add_image('Attention_%d_0' % global_step, x, ii * hp.num_heads + j, dataformats='HWC')
 
                 for ii, prob in enumerate(attn_enc):
                     num_h = prob.size(0)
                     for j in range(hp.num_heads):
-                        x = vutils.make_grid(prob[j * hp.batch_size] * 255)
-                        writer.add_image('Attention_enc_%d_0' % global_step, x, ii * hp.num_heads + j)
+                        # x = vutils.make_grid(prob[j * hp.batch_size] * 255)
+                        x = plot_alignment_to_numpy((prob[j * hp.batch_size] * 255).cpu().detach().numpy())
+                        writer.add_image('Attention_enc_%d_0' % global_step, x, ii * hp.num_heads + j, dataformats='HWC')
 
                 for ii, prob in enumerate(attn_dec):
                     num_h = prob.size(0)
                     for j in range(hp.num_heads):
-                        x = vutils.make_grid(prob[j * hp.batch_size] * 255)
-                        writer.add_image('Attention_dec_%d_0' % global_step, x, ii * hp.num_heads + j)
+                        # x = vutils.make_grid(prob[j * hp.batch_size] * 255)
+                        x = plot_alignment_to_numpy((prob[j * hp.batch_size] * 255).cpu().detach().numpy())
+                        writer.add_image('Attention_dec_%d_0' % global_step, x, ii * hp.num_heads + j, dataformats='HWC')
                 print('Update Attention! at global step: {}'.format(global_step))
 
             if global_step % hp.save_step == 0:
@@ -134,8 +138,8 @@ def main():
                            os.path.join(hp.checkpoint_path, 'checkpoint_tt2_%d.pth.tar' % global_step))
                 print('Saved! Model|checkpoint_tt2_{}.pth.tar, LOSS|{}'.format(global_step, loss))
 
-            t7 = time.time()
-            print('write & save: %d' % (t7 - t6))
+            # t7 = time.time()
+            # print('write & save: %d' % (t7 - t6))
 
 
 if __name__ == '__main__':
