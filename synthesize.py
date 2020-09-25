@@ -6,18 +6,19 @@ import numpy as np
 import hyperparams as hp
 from utils import *
 from run import make_model, run_epoch
+from schedule import data_gen_tt2
 
 import os
 temp_dir = os.path.join(hp.output_dir, 'temp_syns.pt')
 
 
-def synthesize(model_saved_path, batch_one, vocab_size=hp.sample_vocab_size, device='cpu'):
+def synthesize(model, batch_one, vocab_size=hp.sample_vocab_size, device='cpu'):
 
-    params = torch.load(model_saved_path)
-    model = make_model(vocab_size, N=hp.num_layers)
-    # comment out to compare raw-model to trained-model
-    model.load_state_dict(params['state_dict'])
-    model = model.to(device)
+    # params = torch.load(model_saved_path)
+    # model = make_model()
+    # # comment out to compare raw-model to trained-model
+    # model.load_state_dict(params['model'])
+    # model = model.to(device)
     model.eval()
 
     actual_len = batch_one.trg.shape[1]
@@ -40,8 +41,8 @@ def synthesize(model_saved_path, batch_one, vocab_size=hp.sample_vocab_size, dev
             hints = mel_inout[:, :given_hints+i+1, :]
             # hints = mel_inout
             trg_mask = batch_one.make_std_mask(hints, hp.pad_token)
-            out, stop_tokens = model.forward(batch_one.src, hints,
-                                                batch_one.src_mask, trg_mask)
+            out, stop_tokens, attn_enc, attn_dec, attn_endec = model.forward(batch_one.src, batch_one.trg, batch_one.src_mask,
+                                                                             batch_one.trg_mask)
             mel_inout = torch.cat(
                 (mel_inout, out.transpose(-2, -1)[:, -1:, :]), dim=1)
             print(hints.shape, mel_inout.shape, trg_mask.shape, out.shape)
@@ -61,3 +62,49 @@ def synthesize(model_saved_path, batch_one, vocab_size=hp.sample_vocab_size, dev
             print(out[b, :, :-1].unsqueeze(0).shape)
             wav = mel_to_wav(out[b, :, :-1].unsqueeze(0), filename="syn_{}".format(b+1))
             save_wav(wav, 'wav_syn_{}'.format(b+1))
+
+if __name__ == '__main__':
+    model_saved_path = './checkpoint/checkpoint_tt2_4304000.pth.tar'
+    device = 'cuda'
+    model = make_model()
+    model = nn.DataParallel(model.to(device))
+    # load the best model and synthesize with it
+    params = torch.load(model_saved_path)
+    model.load_state_dict(params['model'])
+
+    model.eval()
+
+    data_dir = './weights/prepared-data-2-5_seq.pt'
+    data = torch.load(data_dir)['data']
+
+    # Synthesize using the very first data
+    print("\n--------------- synthesize! ---------------\n")
+    # synthesize
+    synthesize(model, next(data_gen_tt2(data, device=device)), len(data['vocab']), device)
+
+    # test sampling
+    with torch.no_grad():
+        # model = make_model(hp.sample_vocab_size, N=hp.num_layers)
+        # model.to(device)
+        for i, batch in enumerate(data_gen_tt2(data, device=device)):
+            out, stop_tokens, attn_enc, attn_dec, attn_endec = model.forward(batch.src, batch.trg, batch.src_mask,
+                                                                             batch.trg_mask)
+            # print(out.shape)
+            # directly save every teacher-forced output
+            for b in range(out.shape[0]):
+                print(out[b, :, :-1].unsqueeze(0).shape)
+                wav = mel_to_wav(
+                    out[b, :, :-1].unsqueeze(0), filename="output_{}_{}".format(i + 1, b + 1))
+                save_wav(wav, 'wav_output_{}_{}'.format(i + 1, b + 1))
+
+            print(
+                "\n--------------- reconstruct mel to wave under same converter ---------------")
+            wav_original = mel_to_wav(batch.trg.transpose(
+                -2, -1)[0, :, 1:].unsqueeze(0), filename="reconstruct")
+            save_wav(wav_original, 'wav_reconstruct')
+
+            # print(
+            #     "\n--------------- source conversion only using librosa ---------------")
+            # wav_source = mel_to_wav(
+            #     get_mel('./outputs/samples/LJ001-0001.wav').T.unsqueeze(0), filename="source")
+            # save_wav(wav_source, 'wav_source')
