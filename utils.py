@@ -9,7 +9,6 @@ import librosa
 import librosa.display
 import matplotlib.pyplot as plt
 import hyperparams as hp
-from phonemizer import phonemize, separator
 
 UNK = 0
 BLANK = 1

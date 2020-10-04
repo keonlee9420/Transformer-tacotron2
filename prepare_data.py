@@ -46,19 +46,19 @@ class PrepareDataset(Dataset):
 
     def __getitem__(self, idx):
         wav_name = os.path.join(self.root_dir, self.landmarks_frame.iloc[idx, 0]) + '.wav'
-        mel= np.asarray(get_mel(wav_name))
+        mel = np.asarray(get_mel(wav_name))
 
         text = self.landmarks_frame.iloc[idx, 1]
         text = np.asarray(text_to_sequence(text, [hp.cleaners]), dtype=np.int32)
         
-        sample = {'mel':mel, 'text': text}
+        sample = {'mel': mel, 'text': text}
         np.save(os.path.join(self.out_dir, self.landmarks_frame.iloc[idx, 0]), sample)
 
         return sample
     
 if __name__ == '__main__':
     args = docopt(__doc__)
-    dataset = PrepareDataset(os.path.join(hp.data_dir,'metadata.csv'), os.path.join(hp.data_dir,'wavs'), get_data_dir(args['--dataset']))
+    dataset = PrepareDataset(os.path.join(hp.data_dir, 'metadata.csv'), os.path.join(hp.data_dir, 'wavs'), get_data_dir(args['--dataset']))
     dataloader = DataLoader(dataset, batch_size=1, drop_last=False, num_workers=8)
     from tqdm import tqdm
     pbar = tqdm(dataloader)

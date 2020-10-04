@@ -14,46 +14,40 @@ class Decoder(nn.Module):
 
     """
 
-    def __init__(self, layer, N):
+    def __init__(self,
+                 N=hp.num_layers,
+                 h=hp.num_heads,
+                 dim_hidden=hp.model_dim,
+                 dim_ffn=hp.d_ff,
+                 dropout=hp.dropout,
+                 mel_channels=hp.mel_channels,
+                 dim_mel_hidden=hp.hidden_dim,
+                 post_num_conv=hp.post_num_conv):
         super(Decoder, self).__init__()
-        self.layers = clones(layer, N)
-        self.norm = LayerNorm(layer.size)
-        self.centering = Linear(hp.model_dim, hp.model_dim)
-        self.pos = PositionalEncoding(hp.model_dim, hp.model_dropout)
+        self.layers = nn.ModuleList([DecoderLayer(h=h, dim_hidden=dim_hidden,
+                                                  dim_ffn=dim_ffn, dropout=dropout) for _ in range(N)])
+        self.pos = PositionalEncoding(dim_hidden, dropout)
         self.decoder_prenet = DecoderPrenet(
-            hp.mel_channels, hp.hidden_dim, hp.model_dim, hp.pre_dropout)
-        self.mel_linear = MelLinear(hp.model_dim, hp.mel_channels)
-        self.stop_linear = StopLinear(hp.model_dim)
-        self.decoder_postnet = Postnet(hp.mel_channels, hp.hidden_dim)
+            mel_channels, dim_mel_hidden, dim_hidden, dropout)
+        self.decoder_postnet = Postnet(dim_hidden, mel_channels, dim_mel_hidden, dropout, post_num_conv)
 
     def forward(self, x, memory, src_mask, tgt_mask):
         # prenet
         x = self.decoder_prenet(x)  # x: mel_batch
 
-        # center consistency
-        x = self.centering(x)
-
         # positional encoding
         x = self.pos(x)
 
         # decoder
-        attn_dec = list()
-        attn_endec = list()
+        attn_dec, attn_endec = tuple(), tuple()
         for layer in self.layers:
-            x = layer(x, memory, src_mask, tgt_mask)
-            attn_dec.append(layer.self_attn.attn)
-            attn_endec.append(layer.src_attn.attn)
-        x = self.norm(x)
-
-        # mel linear
-        mel_linear = self.mel_linear(x)
-
-        # stop linear
-        stop_tokens = self.stop_linear(x)
+            x, out_dec, out_cross = layer(x, memory, src_mask, tgt_mask)
+            attn_dec += out_dec
+            attn_endec += out_cross
 
         # postnet
         # (batch, mel_channels, n_frames)
-        mels = self.decoder_postnet(mel_linear.transpose(-2, -1))
+        mels, stop_tokens = self.decoder_postnet(x)
 
         return mels, stop_tokens, attn_dec, attn_endec
 
@@ -61,40 +55,27 @@ class Decoder(nn.Module):
 class DecoderLayer(nn.Module):
     """Decoder is made of self-attn, src-attn, and feed forward (defined below)"""
 
-    def __init__(self, size, self_attn, src_attn, feed_forward, dropout):
+    def __init__(self,
+                 h=hp.num_heads,
+                 dim_hidden=hp.model_dim,
+                 dim_ffn=hp.d_ff,
+                 dropout=hp.dropout):
         super(DecoderLayer, self).__init__()
-        self.size = size
-        self.self_attn = self_attn
-        self.src_attn = src_attn
-        self.feed_forward = feed_forward
-        self.sublayer = clones(SublayerConnection(size, dropout), 3)
+        self.self_attn = SublayerConnection(MultiHeadAttention(h=h, dim_hidden=dim_hidden, dropout=dropout),
+                                            dim_hidden=dim_hidden, dropout=dropout)
+        self.cross_attn = SublayerConnection(MultiHeadAttention(h=h, dim_hidden=dim_hidden, dropout=dropout),
+                                             dim_hidden=dim_hidden, dropout=dropout)
+        self.feed_forward = SublayerConnection(PositionwiseFeedForward(dim_hidden=dim_hidden,
+                                                                       dim_ffn=dim_ffn, dropout=dropout),
+                                               dim_hidden=dim_hidden, dropout=dropout)
 
     def forward(self, x, memory, src_mask, tgt_mask):
         """Follow Figure 1 (right) for connections."""
-        m = memory
-        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, tgt_mask))
-        x = self.sublayer[1](x, lambda x: self.src_attn(x, m, m, src_mask))
-        return self.sublayer[2](x, self.feed_forward)
+        out_self, dec_attn = self.self_attn(x, mask=tgt_mask)
+        out_cross, cross_attn = self.cross_attn(out_self, mask=src_mask, memory=memory)
+        out = self.feed_forward(out_cross)
 
-
-def greedy_decode(model, src, src_mask, max_len, start_symbol):
-    memory = model.encode(src, src_mask)
-    ys = torch.ones(1, 1).fill_(start_symbol).type_as(src.data)
-    for i in range(max_len - 1):
-        out = model.decode(memory, src_mask, ys,
-                           subsequent_mask(ys.size(1)).type_as(src.data))
-        prob = model.generator(out[:, -1])
-        _, next_word = torch.max(prob, dim=1)
-        next_word = next_word.data[0]
-        ys = torch.cat([ys,
-                        torch.ones(1, 1).type_as(src.data).fill_(next_word)], dim=1)
-    return ys
-
-
-# def synthesize(model, text):
-#     mel = torch.zeros([1,1,80], device=model.device)
-
-#     with torch.no_grad():
+        return out, dec_attn, cross_attn
 
 
 class DecoderPrenet(nn.Module):
@@ -105,162 +86,60 @@ class DecoderPrenet(nn.Module):
 
     def __init__(self, input_dim, hidden_dim, output_dim, dropout):
         super(DecoderPrenet, self).__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
 
         self.layer = nn.Sequential(
-            nn.Linear(self.input_dim, self.hidden_dim),
+            nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
             nn.Dropout(p=dropout),
-            nn.Linear(self.hidden_dim, self.output_dim),
+            nn.Linear(hidden_dim, output_dim),
             nn.ReLU(),
             nn.Dropout(p=dropout)
         )
 
-    def forward(self, decoder_input):
-        return self.layer(decoder_input)
-
-
-class MelLinear(nn.Module):
-    """Linear projections to predict the mel spectrogram same as Tacotron2."""
-
-    def __init__(self, num_hidden, mel_channels):
-        super(MelLinear, self).__init__()
-        self.mel_linear = Linear(num_hidden, mel_channels)
+        self.projection = nn.Linear(output_dim, output_dim)
 
     def forward(self, decoder_input):
-        return self.mel_linear(decoder_input)
-
-
-class StopLinear(nn.Module):
-    """Linear projections to predict the stop token same as Tacotron2."""
-
-    def __init__(self, num_hidden):
-        super(StopLinear, self).__init__()
-        self.stop_linear = Linear(num_hidden, 1, w_init='sigmoid')
-
-    def forward(self, decoder_input):
-        return self.stop_linear(decoder_input)
+        out = self.layer(decoder_input)
+        out = self.projection(out)
+        return out
 
 
 class Postnet(nn.Module):
-    """Linear projections to produce a residual to refine the reconstruction of mel spectrogram same as Tacotron2."""
-
-    def __init__(self, mel_channels, hidden_dim, kernel_size=hp.post_kernel_size, num_conv=hp.post_num_conv, dropout=hp.post_dropout):
+    def __init__(self,
+                 dim_hidden=hp.model_dim,
+                 mel_channels=hp.mel_channels,
+                 dim_mel_hidden=hp.hidden_dim,
+                 dropout=hp.dropout,
+                 n_conv=hp.post_num_conv):
         super(Postnet, self).__init__()
-        self.mel_channels = mel_channels
-        self.hidden_dim = hidden_dim
-        self.kernel_size = kernel_size
-        self.num_conv = num_conv
+        self.mel_linear = nn.Linear(dim_hidden, mel_channels)
+        self.stop_linear = nn.Linear(dim_hidden, 1)
 
-        self.dropout = nn.Dropout(dropout)
-        self.convolutions = nn.ModuleList()
-
-        self.convolutions.append(
-            nn.Sequential(
-                ConvNorm(self.mel_channels, self.hidden_dim,
-                         kernel_size=self.kernel_size, stride=1,
-                         padding=int((self.kernel_size - 1) / 2),
-                         dilation=1, w_init_gain='tanh'),
-                nn.BatchNorm1d(self.hidden_dim))
+        self.post_conv = nn.ModuleList()
+        self.post_conv.append(
+            ConvNorm(mel_channels, dim_mel_hidden, kernel_size=5,
+                     batch_norm=True, activation='tanh', dropout=dropout)
         )
-
-        for i in range(1, self.num_conv - 1):
-            self.convolutions.append(
-                nn.Sequential(
-                    ConvNorm(self.hidden_dim,
-                             self.hidden_dim,
-                             kernel_size=self.kernel_size, stride=1,
-                             padding=int(
-                                 (self.kernel_size - 1) / 2),
-                             dilation=1, w_init_gain='tanh'),
-                    nn.BatchNorm1d(self.hidden_dim))
+        for _ in range(n_conv - 2):
+            self.post_conv.append(
+                ConvNorm(dim_mel_hidden, dim_mel_hidden, kernel_size=5,
+                         batch_norm=True, activation='tanh', dropout=dropout)
             )
-
-        self.convolutions.append(
-            nn.Sequential(
-                ConvNorm(self.hidden_dim, self.mel_channels,
-                         kernel_size=self.kernel_size, stride=1,
-                         padding=int((self.kernel_size - 1) / 2),
-                         dilation=1, w_init_gain='linear'),
-                nn.BatchNorm1d(self.mel_channels))
+        self.post_conv.append(
+            ConvNorm(dim_mel_hidden, mel_channels, kernel_size=5,
+                     batch_norm=True, activation=None, dropout=dropout)
         )
 
     def forward(self, x):
-        for i in range(len(self.convolutions) - 1):
-            x = self.dropout(torch.tanh(self.convolutions[i](x)))
-        x = self.dropout(self.convolutions[-1](x))
+        mel_out = self.mel_linear(x)
+        stop_out = self.stop_linear(x)
 
-        return x
+        conv_out = mel_out.clone()
+        for conv_layer in self.post_conv:
+            conv_out = conv_layer(conv_out)
+        mel_out += conv_out     # Residual path
+
+        return mel_out, stop_out
 
 
-if __name__ == "__main__":
-    from utils import *
 
-    PAD_TOKEN = 0
-    # START_TOKEN = 2
-    # END_TOKEN = 3
-
-    sample_batch = 10
-    print("TOTAL BATCH: {}".format(sample_batch))
-
-    print("\n-------------- mel-preprocessing --------------")
-    audio_dirs = ['/home/keon/speech-datasets/LJSpeech-1.1/wavs/LJ001-{}.wav'
-                  .format((4-len(str(i+1)))*'0' + str(i+1)) for i in range(sample_batch)]
-
-    padded_mel, stop_tokens = pad_mel(
-        [get_mel(audio_dir) for audio_dir in audio_dirs], pad_token=PAD_TOKEN)
-    mel_batch = torch.tensor(padded_mel)
-    mel_maxlen = mel_batch.shape[1]
-    # (batch, n_frames, mel_channels)
-    print("mel_batch.shape:\n", mel_batch.shape)
-
-    # save spectrogram
-    save_mel(mel_batch, normalized=True)
-
-    from model.attention import *
-    from model.encoder import *
-    from model.decoder import *
-    import hyperparams as hp
-
-    c = copy.deepcopy
-    attn = MultiHeadedAttention(hp.num_heads, hp.model_dim)
-    ff = PositionwiseFeedForward(hp.model_dim, hp.hidden_dim, hp.model_dropout)
-    position = PositionalEncoding(hp.model_dim, hp.model_dropout)
-    decoder = Decoder(DecoderLayer(
-        hp.model_dim, c(attn), c(attn), c(ff), hp.model_dropout), hp.num_layers)
-
-    print("\n-------------- encoder --------------")
-    # sample encoding
-    memory, src_mask = sample_encoding(sample_batch)
-    # encoder output, (batch, n_sequences, model_dim)
-    print("memory.shape:\n", memory.shape)
-
-    print("\n-------------- decoder --------------")
-    tgt_mask = torch.ones((sample_batch, mel_maxlen, mel_maxlen))
-    mels, stop_tokens = decoder(mel_batch, memory,
-                                src_mask, tgt_mask)
-    print("decoderoutput mels, stop_tokens\n:", mels.shape, stop_tokens.shape)
-
-    # print("\n-------------- pre-decoder --------------")
-    # decoder_input = decoder.decoder_prenet(mel_batch)
-    # print("decoder_input.shape:\n", decoder_input.shape) # (batch, n_frames, model_dim)
-
-    # print("\n-------------- decoder --------------")
-    # # memory = torch.ones((sample_batch, seq_maxlen, hp.model_dim)) # only for decoder without encoder
-    # print("memory.shape:\n", memory.shape) # encoder output, (batch, n_sequences, model_dim)
-
-    # mel_maxlen = mel_batch.shape[1]
-    # decoder_input = decoder(decoder_input, memory, \
-    #     torch.ones((sample_batch, 1, seq_maxlen)), torch.ones((sample_batch, mel_maxlen, mel_maxlen)))
-    # print("decoder OUTPUT.shape:\n:", decoder_input.shape)
-
-    # print("\n-------------- post-decoder --------------")
-    # mel_linear_output = decoder.mel_linear(decoder_input)
-    # print("MEL LINEAR~", mel_linear_output.shape)
-    # stop_linear = decoder.stop_linear(decoder_input)
-    # print("STOP LINEAR~", stop_linear.shape)
-
-    # decoder_postnet = decoder.decoder_postnet(mel_linear_output.transpose(-2, -1))
-    # print("decoder_postnet.shape:", decoder_postnet.shape)

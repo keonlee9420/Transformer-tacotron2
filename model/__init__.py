@@ -3,23 +3,44 @@ import copy
 import torch.nn as nn
 
 import hyperparams as hp
-from .encoder import Encoder, EncoderLayer
-from .decoder import Decoder, DecoderLayer
-from .attention import MultiHeadedAttention
-from .modules import Embeddings, PositionwiseFeedForward
+from .encoder import Encoder
+from .decoder import Decoder
 
 
-class EncoderDecoder(nn.Module):
+class TransformerTTS(nn.Module):
     """
     A standard Encoder-Decoder architecture. Base for this and many
     other models.
     """
 
-    def __init__(self, encoder, decoder, src_embed):
-        super(EncoderDecoder, self).__init__()
-        self.encoder = encoder
-        self.decoder = decoder
-        self.src_embed = src_embed
+    def __init__(self,
+                 N=hp.num_layers,
+                 h=hp.num_heads,
+                 dim_embedding=hp.model_dim,
+                 dim_hidden=hp.model_dim,
+                 dim_ffn=hp.d_ff,
+                 dropout=hp.dropout,
+                 num_embeddings=hp.num_embeddings,
+                 mel_channels=hp.mel_channels,
+                 dim_mel_hidden=hp.hidden_dim,
+                 post_num_conv=hp.post_num_conv):
+        super(TransformerTTS, self).__init__()
+        self.encoder = Encoder(N=N, h=h,
+                               dim_hidden=dim_hidden,
+                               dim_ffn=dim_ffn,
+                               dim_embedding=dim_embedding,
+                               dropout=dropout,
+                               num_embeddings=num_embeddings)
+        self.decoder = Decoder(N=N, h=h,
+                               dim_hidden=dim_hidden,
+                               dim_ffn=dim_ffn,
+                               dropout=dropout,
+                               mel_channels=mel_channels,
+                               dim_mel_hidden=dim_mel_hidden,
+                               post_num_conv=post_num_conv)
+
+        self._initialize_weight(self.encoder)
+        self._initialize_weight(self.decoder)
 
     def forward(self, src, tgt, src_mask, tgt_mask):
         """Take in and process masked src and target sequences."""
@@ -30,29 +51,17 @@ class EncoderDecoder(nn.Module):
     def encode(self, src, src_mask):
         # print("ENCODER INPUT shape:", self.src_embed(src).shape)
         # print("ENCODER OUTPUT shape:", self.encoder(self.src_embed(src), src_mask).shape)
-        return self.encoder(self.src_embed(src), src_mask)
+        return self.encoder(src, src_mask)
 
     def decode(self, memory, src_mask, tgt, tgt_mask):
         # print("DECODER INPUT shape:", self.tgt_embed(tgt).shape)
         # print("DECODER OUTPUT shape:", self.decoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask).shape)
         return self.decoder(tgt, memory, src_mask, tgt_mask)
 
-
-def make_model(src_vocab=hp.num_embeddings, N=hp.num_layers,
-               d_model=hp.model_dim, d_ff=hp.d_ff, h=hp.num_heads, dropout=hp.model_dropout):
-    """Helper: Construct a model from hyperparameters."""
-    c = copy.deepcopy
-    attn = MultiHeadedAttention(h, d_model)
-    ff = PositionwiseFeedForward(d_model, d_ff, dropout)
-    model = EncoderDecoder(
-        Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
-        Decoder(DecoderLayer(d_model, c(attn), c(attn),
-                             c(ff), dropout), N),
-        Embeddings(d_model, src_vocab))
-
-    # This was important from their code.
-    # Initialize parameters with Glorot / fan_avg.
-    for p in model.parameters():
-        if p.dim() > 1:
-            nn.init.xavier_uniform_(p)
-    return model
+    @staticmethod
+    def _initialize_weight(module):
+        for p in module.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)
+            else:
+                nn.init.uniform_(p)

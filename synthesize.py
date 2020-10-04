@@ -6,7 +6,7 @@ import numpy as np
 import hyperparams as hp
 from utils import *
 from run import make_model, run_epoch
-from schedule import data_gen_tt2
+from schedule import data_gen_tt2, Batch
 
 import os
 temp_dir = os.path.join(hp.output_dir, 'temp_syns.pt')
@@ -74,37 +74,46 @@ if __name__ == '__main__':
 
     model.eval()
 
-    data_dir = './weights/prepared-data-2-5_seq.pt'
+    data_dir = './weights/prepared-data-1-1_seq.pt'
     data = torch.load(data_dir)['data']
 
-    # Synthesize using the very first data
-    print("\n--------------- synthesize! ---------------\n")
-    # synthesize
-    synthesize(model, next(data_gen_tt2(data, device=device)), len(data['vocab']), device)
+    # # Synthesize using the very first data
+    # print("\n--------------- synthesize! ---------------\n")
+    # # synthesize
+    # synthesize(model, next(data_gen_tt2(data, device=device)), len(data['vocab']), device)
+    #
+    # # test sampling
+    # with torch.no_grad():
+    #     # model = make_model(hp.sample_vocab_size, N=hp.num_layers)
+    #     # model.to(device)
+    #     for i, batch in enumerate(data_gen_tt2(data, device=device)):
+    #         out, stop_tokens, attn_enc, attn_dec, attn_endec = model.forward(batch.src, batch.trg, batch.src_mask,
+    #                                                                          batch.trg_mask)
+    #         # print(out.shape)
+    #         # directly save every teacher-forced output
+    #         for b in range(out.shape[0]):
+    #             print(out[b, :, :-1].unsqueeze(0).shape)
+    #             wav = mel_to_wav(
+    #                 out[b, :, :-1].unsqueeze(0), filename="output_{}_{}".format(i + 1, b + 1))
+    #             save_wav(wav, 'wav_output_{}_{}'.format(i + 1, b + 1))
+    #
+    #         print(
+    #             "\n--------------- reconstruct mel to wave under same converter ---------------")
+    #         wav_original = mel_to_wav(batch.trg.transpose(
+    #             -2, -1)[0, :, 1:].unsqueeze(0), filename="reconstruct")
+    #         save_wav(wav_original, 'wav_reconstruct')
+    #
+    #         # print(
+    #         #     "\n--------------- source conversion only using librosa ---------------")
+    #         # wav_source = mel_to_wav(
+    #         #     get_mel('./outputs/samples/LJ001-0001.wav').T.unsqueeze(0), filename="source")
+    #         # save_wav(wav_source, 'wav_source')
 
-    # test sampling
-    with torch.no_grad():
-        # model = make_model(hp.sample_vocab_size, N=hp.num_layers)
-        # model.to(device)
-        for i, batch in enumerate(data_gen_tt2(data, device=device)):
-            out, stop_tokens, attn_enc, attn_dec, attn_endec = model.forward(batch.src, batch.trg, batch.src_mask,
-                                                                             batch.trg_mask)
-            # print(out.shape)
-            # directly save every teacher-forced output
-            for b in range(out.shape[0]):
-                print(out[b, :, :-1].unsqueeze(0).shape)
-                wav = mel_to_wav(
-                    out[b, :, :-1].unsqueeze(0), filename="output_{}_{}".format(i + 1, b + 1))
-                save_wav(wav, 'wav_output_{}_{}'.format(i + 1, b + 1))
+    batch_src = data['src'][0]
+    src, vocab = phoneme_batch("please don't leave me alone.")
+    mel_batch = data['tgt'][0]
+    mel_stops = data['tgt_stops'][0]
 
-            print(
-                "\n--------------- reconstruct mel to wave under same converter ---------------")
-            wav_original = mel_to_wav(batch.trg.transpose(
-                -2, -1)[0, :, 1:].unsqueeze(0), filename="reconstruct")
-            save_wav(wav_original, 'wav_reconstruct')
+    batch = Batch(src.view(1, -1).to(device=device, dtype=torch.long), {'trg': torch.randn_like(mel_batch).to(device), 'trg_stops': torch.randn_like(mel_stops).to(device)})
 
-            # print(
-            #     "\n--------------- source conversion only using librosa ---------------")
-            # wav_source = mel_to_wav(
-            #     get_mel('./outputs/samples/LJ001-0001.wav').T.unsqueeze(0), filename="source")
-            # save_wav(wav_source, 'wav_source')
+    synthesize(model, batch, len(data['vocab']), device)

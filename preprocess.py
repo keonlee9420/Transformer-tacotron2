@@ -42,7 +42,7 @@ class LJDatasets(Dataset):
         text = prepared_data.item().get('text')
         text_length = len(text)
 
-        sample = {'mel': mel, 'text': text, 'text_length':text_length}
+        sample = {'mel': mel, 'text': text, 'text_length': text_length}
 
         return sample
 
@@ -84,4 +84,4 @@ def get_data_dir(d_name):
 def get_dataset(prepared_data_dir):
     data_dir = get_data_dir(prepared_data_dir)
     print('use dataset: %s' % data_dir.split("/")[-1])
-    return LJDatasets(os.path.join(hp.data_dir,'metadata.csv'), os.path.join(hp.data_dir,'wavs'), data_dir)
+    return LJDatasets(os.path.join(hp.data_dir, 'metadata.csv'), os.path.join(hp.data_dir, 'wavs'), data_dir)
