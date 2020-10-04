@@ -7,20 +7,6 @@ import torch.nn.functional as F
 import hyperparams as hp
 
 
-class Linear(nn.Module):
-    """Linear Module."""
-    def __init__(self, in_dim, out_dim, bias=True, w_init='linear'):
-        super(Linear, self).__init__()
-        self.linear_layer = nn.Linear(in_dim, out_dim, bias=bias)
-
-        nn.init.xavier_uniform_(
-            self.linear_layer.weight,
-            gain=nn.init.calculate_gain(w_init))
-
-    def forward(self, x):
-        return self.linear_layer(x)
-
-
 class ConvNorm(nn.Module):
     """Construct a conv1d + batchnorm1d module."""
 
@@ -45,9 +31,6 @@ class ConvNorm(nn.Module):
             self.dropout = nn.Dropout(p=dropout)
         else:
             self.dropout = None
-
-        nn.init.xavier_uniform_(
-            self.conv.weight, gain=nn.init.calculate_gain(activation))
 
     def forward(self, x):
         out = self.conv(x)

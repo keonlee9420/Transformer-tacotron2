@@ -80,7 +80,7 @@ class EncoderPrenet(nn.Module):
         self.conv3 = ConvNorm(out_channels, out_channels,
                               batch_norm=True, activation='relu', dropout=dropout)
 
-        self.projection = Linear(out_channels, out_channels)
+        self.projection = nn.Linear(out_channels, out_channels)
 
     def forward(self, x):
         out1 = self.conv1(x)
